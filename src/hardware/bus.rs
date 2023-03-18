@@ -1,8 +1,8 @@
 pub struct Bus {
-    devices : Vec<Device>
+    pub devices : Vec<Device>
 }
 
-impl Bus {
+pub impl Bus {
     pub fn new() -> Bus {
         let mut devices = Vec::new();
         devices.push(Ram::new());

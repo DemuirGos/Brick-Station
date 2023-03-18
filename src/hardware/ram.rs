@@ -1,5 +1,7 @@
+use super::interfaces::Device;
+
 pub struct Ram {
-    Data : [u8; 0xFFFF]
+    pub Data : [u8; 0xFFFF]
 }
 
 impl Ram {
@@ -18,7 +20,7 @@ impl Device for Ram {
         self.Data[addr as usize]
     }
 
-    fn write(&self, addr: u16, value: u8) -> unit {
+    fn write(&self, addr: u16, value: u8) -> () {
         self.Data[addr as usize] = value
     }
 }

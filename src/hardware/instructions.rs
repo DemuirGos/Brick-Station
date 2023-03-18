@@ -1,3 +1,5 @@
+use super::{address_mode::Address_Mode, cpu::Cpu};
+
 pub struct Instructions {
     mnemonic : String,
     opcode    : u8,
@@ -7,11 +9,11 @@ pub struct Instructions {
     operation : Fn(&mut Cpu) -> bool
 }
 
-pub static Metadata : [Instructions] = [
+pub static Metadata : [256, Instructions] = [
 
 ]; 
 
-pub impl Instructions {
+impl Instructions {
     fn new(mnemonic: String, opcode: u8, cycles: u8, size: u8, addressMode: Address_Mode, operation: Fn(&mut Cpu) -> u8) -> Instructions {
         Instructions {
             mnemonic : mnemonic,

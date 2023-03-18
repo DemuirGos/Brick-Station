@@ -1,5 +1,5 @@
 [package]
-name = "Brick-Station"
+name = "brick_station"
 version = "0.1.0"
 edition = "2018"
 

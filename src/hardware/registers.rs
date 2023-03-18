@@ -1,3 +1,5 @@
+use std::ops;
+
 pub enum Flag {
     C = 1 << 0, // Carry
     Z = 1 << 1, // Zero
@@ -10,14 +12,14 @@ pub enum Flag {
 }
 
 pub struct Registers {
-    x       : u8, // A 15..7 F 7..0
-    y       : u8, // D 15..7 E 7..0
-    a       : u8,  // H 15..7 L 7..0
-    pc      : u8,
-    sp      : u8,
-    flags   : u8, 
-    status  : u8,
-    fetched : u8,
+    pub x       : u8, // A 15..7 F 7..0
+    pub y       : u8, // D 15..7 E 7..0
+    pub a       : u8,  // H 15..7 L 7..0
+    pub pc      : u8,
+    pub sp      : u8,
+    pub flags   : u8, 
+    pub status  : u8,
+    pub fetched : u8,
 }
 
 impl Registers {
@@ -34,11 +36,29 @@ impl Registers {
         }
     }
 
-    pub fn GetFlag(&self, flag: Flag) -> Flag {
-        self.flags & flag
+    pub fn GetFlag(&self, flag: Flag) -> u8 {
+        match flag {
+            Flag::C => self.flags & (Flag::C as u8),
+            Flag::Z => self.flags & (Flag::Z as u8),
+            Flag::I => self.flags & (Flag::I as u8),
+            Flag::D => self.flags & (Flag::D as u8),
+            Flag::B => self.flags & (Flag::B as u8),
+            Flag::U => self.flags & (Flag::U as u8),
+            Flag::O => self.flags & (Flag::O as u8),
+            Flag::N => self.flags & (Flag::N as u8),
+        }
     }
 
-    pub fn SetFlag(&self, flag: Flag) -> Flag {
-        self.flags |= flag;
+    pub fn SetFlag(&self, flag: Flag) -> () {
+        self.flags = match flag {
+            Flag::C => self.flags | (Flag::C as u8),
+            Flag::Z => self.flags | (Flag::Z as u8),
+            Flag::I => self.flags | (Flag::I as u8),
+            Flag::D => self.flags | (Flag::D as u8),
+            Flag::B => self.flags | (Flag::B as u8),
+            Flag::U => self.flags | (Flag::U as u8),
+            Flag::O => self.flags | (Flag::O as u8),
+            Flag::N => self.flags | (Flag::N as u8),
+        }
     }
 }
