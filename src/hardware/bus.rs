@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use super::{interfaces::Device, ram::Ram, cpu::Cpu};
 
 pub struct Bus(pub Vec<Box<dyn Device>>);
