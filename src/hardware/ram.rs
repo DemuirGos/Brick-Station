@@ -17,10 +17,10 @@ impl Device for Ram {
     }
 
     fn read(&self, addr: u16) -> u8 {
-        self.Data[addr as usize]
+        self.Data[addr as usize] 
     }
 
-    fn write(&self, addr: u16, value: u8) -> () {
+    fn write(&mut self, addr: u16, value: u8) -> () {
         self.Data[addr as usize] = value
     }
 }

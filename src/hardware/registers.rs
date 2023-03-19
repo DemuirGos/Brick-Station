@@ -1,5 +1,3 @@
-use std::ops;
-
 pub enum Flag {
     C = 1 << 0, // Carry
     Z = 1 << 1, // Zero
@@ -49,7 +47,7 @@ impl Registers {
         }
     }
 
-    pub fn SetFlag(&self, flag: Flag) -> () {
+    pub fn SetFlag(&mut self, flag: Flag) -> () {
         self.flags = match flag {
             Flag::C => self.flags | (Flag::C as u8),
             Flag::Z => self.flags | (Flag::Z as u8),

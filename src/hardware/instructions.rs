@@ -1,27 +1,26 @@
-use super::{address_mode::Address_Mode, cpu::Cpu};
+use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}};
 
+use super::{address_mode::AddressMode, cpu::Cpu};
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Instructions {
-    mnemonic : String,
-    opcode    : u8,
-    cycles    : u8,
-    size      : u8,
-    address_mode : Address_Mode,
-    operation : Fn(&mut Cpu) -> bool
+    pub mnemonic : String,
+    pub opcode    : u8,
+    pub cycles    : u8,
+    pub address_mode : AddressMode,
 }
 
-pub static Metadata : [256, Instructions] = [
-
-]; 
-
 impl Instructions {
-    fn new(mnemonic: String, opcode: u8, cycles: u8, size: u8, addressMode: Address_Mode, operation: Fn(&mut Cpu) -> u8) -> Instructions {
+    pub fn new(mnemonic: String, opcode: u8, cycles: u8, addressMode: AddressMode) -> Instructions {
         Instructions {
             mnemonic : mnemonic,
             opcode    : opcode,
             cycles    : cycles,
-            size      : size,
             address_mode : addressMode,
-            operation : operation
         }
+    }
+
+    pub fn operation(&self, cpu_ref: &mut Cpu) -> bool {
+        false
     }
 }
