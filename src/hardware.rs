@@ -5,3 +5,4 @@ pub mod interfaces;
 pub mod ram;
 pub mod registers;
 pub mod bus;
+pub mod opcodes;

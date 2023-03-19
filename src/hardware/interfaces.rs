@@ -1,5 +1,5 @@
 pub trait Device {
-    fn withinRange(&self, addr: u16) -> bool {
+    fn within_range(&self, _: u16) -> bool {
         true
     }
 
