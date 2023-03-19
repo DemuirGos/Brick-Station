@@ -1,5 +1,3 @@
-use std::ops::Add;
-
 use super::{address_mode::AddressMode, cpu::{Cpu, self}, opcodes::Opcode, registers::Flag, interfaces::Device};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,6 +57,14 @@ impl Instructions {
                 cpu_ref.registers.a = result as u8;
                 true
             },
+            Opcode::BIT => {
+                cpu_ref.fetch();
+                let value = cpu_ref.registers.a as u16 & cpu_ref.registers.fetched as u16 ; 
+                cpu_ref.registers.set_flag(Flag::Z, value > 1 << 6);
+                cpu_ref.registers.set_flag(Flag::Z, value == 0x00);
+                cpu_ref.registers.set_flag(Flag::N, value & 0x80 != 0);
+                false
+            }
             Opcode::AND => {
                 cpu_ref.fetch();
                 cpu_ref.registers.a &= cpu_ref.registers.fetched;
@@ -91,8 +97,38 @@ impl Instructions {
             Opcode::LSR => {
                 cpu_ref.fetch();
                 let result = (cpu_ref.registers.fetched as u16) >> 1;
-                cpu_ref.registers.set_flag(Flag::N, result & 0x80 != 0);
-                cpu_ref.registers.set_flag(Flag::Z, result & 0x80 != 0);
+                cpu_ref.registers.set_flag(Flag::N, result & 0x0080 != 0);
+                cpu_ref.registers.set_flag(Flag::Z, result & 0x00FF == 0);
+
+                if self.address_mode == AddressMode::Imp {
+                    cpu_ref.registers.a = result as u8;
+                } else {
+                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8)
+                }
+
+                false
+            },
+            Opcode::ROR => {
+                cpu_ref.fetch();
+                let result = ((cpu_ref.registers.fetched as u16) << 1) | cpu_ref.registers.get_flag(Flag::C) as u16;
+                cpu_ref.registers.set_flag(Flag::C, result & 0xFF00 != 0);
+                cpu_ref.registers.set_flag(Flag::N, result & 0x0080 != 0);
+                cpu_ref.registers.set_flag(Flag::Z, result & 0x00FF == 0);
+
+                if self.address_mode == AddressMode::Imp {
+                    cpu_ref.registers.a = result as u8;
+                } else {
+                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8)
+                }
+
+                false
+            },
+            Opcode::ROL => {
+                cpu_ref.fetch();
+                let result = ((cpu_ref.registers.fetched as u16) >> 1) | ((cpu_ref.registers.get_flag(Flag::C) as u16) << 7);
+                cpu_ref.registers.set_flag(Flag::C, result & 0xFF00 != 0);
+                cpu_ref.registers.set_flag(Flag::N, result & 0x0080 != 0);
+                cpu_ref.registers.set_flag(Flag::Z, result & 0x00FF == 0);
 
                 if self.address_mode == AddressMode::Imp {
                     cpu_ref.registers.a = result as u8;
@@ -365,15 +401,62 @@ impl Instructions {
                 cpu_ref.registers.status = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16);
                 cpu_ref.registers.set_flag(Flag::U, false);
                 false
+            },
+            Opcode::BRK => {
+                cpu_ref.registers.pc += 1;
+                cpu_ref.registers.set_flag(Flag::I, true);
+                
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, (cpu_ref.registers.pc as u8) >> 8);
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 1, cpu_ref.registers.pc as u8);
+                cpu_ref.registers.sp -= 2;
+
+                cpu_ref.registers.set_flag(Flag::B, true);
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16, cpu_ref.registers.status as u8);
+                cpu_ref.registers.sp -= 1;
+                cpu_ref.registers.set_flag(Flag::B, false);
+
+                let lo = cpu_ref.read(0xFFFE) as u16;
+                let hi = cpu_ref.read(0xFFFE + 1) as u16;
+                cpu_ref.registers.pc += (hi << 8) | lo;
+
+                false
+            },
+            Opcode::JSR => {
+                cpu_ref.registers.pc -= 1;
+
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, (cpu_ref.registers.pc >> 8) as u8);    
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 1, (cpu_ref.registers.pc) as u8);    
+                cpu_ref.registers.sp -= 2;
+
+                cpu_ref.registers.pc = cpu_ref.address_mode.address_abs;
+                false
+            },
+            Opcode::RTS => {
+                cpu_ref.registers.sp += 1;
+                let lo = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16) as u16;    
+
+                cpu_ref.registers.sp += 1;
+                let hi = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16) as u16;    
+
+                cpu_ref.registers.pc = (hi << 8) | lo; 
+                false
+            },
+            Opcode::RTI => {
+                cpu_ref.registers.sp += 1;
+                cpu_ref.registers.status = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16);
+                cpu_ref.registers.set_flag(Flag::B, false);
+                cpu_ref.registers.set_flag(Flag::U, false);
+
+                cpu_ref.registers.sp += 1;
+                let lo = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16) as u16;    
+
+                cpu_ref.registers.sp += 1;
+                let hi = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16) as u16;    
+
+                cpu_ref.registers.pc = (hi << 8) | lo; 
+                false
             }
             _ => false 
         }
     }
 }
-
-// pub enum Opcode {
-//     BRK, 
-//     JSR, BIT, ROL, 
-//     RTI, 
-//     RTS, ROR,
-// }
