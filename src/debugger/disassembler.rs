@@ -22,7 +22,6 @@ impl Disassembler {
         let mut string_builder = vec![];
         let instruction_set = Cpu::setup_instruction_map();
 
-        
         for byte in  program {
             if let Some(instruction) = instruction_set.get(byte) {
                 let mut instruction_string = String::new();

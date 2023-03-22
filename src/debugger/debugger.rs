@@ -86,11 +86,25 @@ impl<'a> State<'a> {
                                                     .read(true)
                                                     .open(path.trim())
             {
-                let mut bytes = Vec::<u8>::new();
+                // readlines 
                 let mut reader = BufReader::new(metadata_file);
-
-                const EOF: u8 = 0;
-                reader.read_until(EOF, &mut bytes);
+                let mut lines = Vec::new();
+                let mut bytes = Vec::new();
+                for line in reader.lines() {
+                    // read line
+                    if let Ok(line) = line {
+                        lines.push(line);
+                    }
+                }
+                
+                for line in lines {
+                    let mut split = line.split_whitespace();
+                    while let Some(byte) = split.next() {
+                        if let Ok(byte) = u8::from_str_radix(byte, 16) {
+                            bytes.push(byte);
+                        }
+                    }
+                }
                 return Ok(bytes);
             }
             return Err(Error::new(ErrorKind::Other, "Error"))
@@ -352,7 +366,7 @@ impl<'a> State<'a> {
                         if let Ok(program) = State::load_program_from_file(Some(program_path.clone()))
                         {
                             for (i, byte) in program.iter().enumerate() {
-                                app.write((0x8000 + i as u16) as u16, *byte - 48);
+                                app.write((0x8000 + i as u16) as u16, *byte);
                             }
 
                             let disassembled_program = Disassembler::disassemble(&program);
