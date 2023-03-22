@@ -62,6 +62,12 @@ impl<'a> State<'a> {
             program: vec![],
         }));
 
+        
+
+        (*bus).borrow_mut().write(0xFFFC, 0x00);
+        (*bus).borrow_mut().write(0xFFFC + 1, 0x80);
+        (*cpu).borrow_mut().reset();
+
 
         state
     }
@@ -91,7 +97,7 @@ impl<'a> State<'a> {
         if let Ok(_) = execute!(io::stdout(), Print(prompt)) {
             let mut input = String::new();
             io::stdin().read_line(&mut input).unwrap();
-            
+            return parse_file(input);
         }
         return Err(Error::new(ErrorKind::Other, "Error"))
 
@@ -115,15 +121,9 @@ impl<'a> State<'a> {
         terminal.clear()?;
         terminal.hide_cursor()?;
 
-        let pc_counter_start = 0x0200;
-        app.write(0xFFFC, (pc_counter_start & 0xFF) as u8);
-        app.write(0xFFFC, (pc_counter_start >> 8) as u8);
-
         let x_dimension = terminal.size().unwrap().width;
         let y_dimension = terminal.size().unwrap().height;
         
-        dbg!(x_dimension, y_dimension);
-
         terminal.resize(Rect {
             x : 0, 
             y : 0, 
@@ -139,20 +139,20 @@ impl<'a> State<'a> {
             if let Ok(Event::Key(key)) = read() {
                 match key.code {
                     KeyCode::PageUp => {
-                        app.memory_page_index = (app.memory_page_index + 1) % 16;
+                        app.memory_page_index = (app.memory_page_index + 1) % 0xFF;
                     },
                     KeyCode::PageDown => {
                         if app.memory_page_index == 0 {
-                            app.memory_page_index = 15;
+                            app.memory_page_index = 0xFF -1;
                         } else {
-                            app.memory_page_index = (app.memory_page_index - 1) % 16;
+                            app.memory_page_index = (app.memory_page_index - 1) % 0xFF;
                         }
                     },
                     KeyCode::Char('r') => {
                         if let Ok(program) = State::load_program_from_file(Some(program_path.clone()))
                         {
                             for (i, byte) in program.iter().enumerate() {
-                                app.write((pc_counter_start + i as u16) as u16, *byte - 48);
+                                app.write((0x8000 + i as u16) as u16, *byte - 48);
                             }
 
                             let disassembled_program = Disassembler::disassemble(&program);
@@ -251,17 +251,32 @@ impl<'a> State<'a> {
             table
         };
 
-        let page_cells = (0..=16)
-            .map(|i| if i == 0 {
-                format!("[ index]")
-            } else {
-                format!("[{}{:02X}]", if i - 1 == app.memory_page_index { ">>" } else { "" } ,i)
-            })
+        
+        let upper_bound = if app.memory_page_index < 16 {
+            16
+        } else if app.memory_page_index > 256 - 16 {
+            255
+        } else {
+            app.memory_page_index + 8
+        };
+
+        let lower_bound = if app.memory_page_index < 16 {
+            0
+        } else if app.memory_page_index > 256 - 16 {
+            255 - 16
+        } else {
+            app.memory_page_index - 7
+        };
+        
+        let mut rows_vec = Vec::new();
+        rows_vec.push(Row::new([Cell::from("[ Pages ]")]));
+        let page_cells = (lower_bound..upper_bound)
+            .map(|i| format!("[{}{:02X}]", if i == app.memory_page_index { ">>" } else { "" } ,i))
             .map(|s| Span::styled(s, Style::default().fg(Color::LightBlue)))
             .map(|s| Row::new([s]).height(2))
-            .collect::<Vec<_>>();
-
-        let page_selection_table = Table::new(page_cells)
+            .for_each(|r| rows_vec.push(r));
+        // put element at the beggining of the vector
+        let page_selection_table = Table::new(rows_vec)
             .block(Block::default().borders(Borders::ALL).title("Pages"))
             .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
             .highlight_symbol(">> ")
