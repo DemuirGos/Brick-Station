@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::Weak, borrow::Borrow, hash::Hash};
+use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::{Weak, Rc}, borrow::Borrow, hash::Hash, ops::Deref};
 
 use super::{
     registers::{Registers, Flag}, 
@@ -14,7 +14,7 @@ use super::{
 #[derive(Clone)]
 pub struct Cpu<'a> {
     pub registers : Registers,
-    pub bus       : Option<Weak<RefCell<Bus<'a>>>>,
+    pub bus       : Option<Rc<RefCell<Bus<'a>>>>,
     pub cycle     : i32,
     pub opcode    : u8,
     pub address_mode : AddressingData,
@@ -25,7 +25,7 @@ impl<'a> Cpu<'a> {
     pub fn new() -> Cpu<'a> {
         let mut new_cpu = Cpu {
             registers : Registers::new(),
-            bus       : Option::None,
+            bus       : None,
             cycle     : 0,
             opcode    : 0,
             address_mode : AddressingData::new(),
@@ -79,8 +79,8 @@ impl<'a> Cpu<'a> {
         self.registers.fetched
     }
     
-    pub fn connect_bus(&'a mut self, bus: Weak<RefCell<Bus<'a>>>)  {
-        self.bus = Option::Some(bus);
+    pub fn connect_bus(&'a mut self, bus: Rc<RefCell<Bus<'a>>>)  {
+        self.bus = Some(bus);
     }
 
     pub fn setup_instruction_map() -> HashMap<u8, Instructions> {
@@ -114,25 +114,33 @@ impl<'a> Cpu<'a> {
         }
         instructions_set
     }
+
+    pub fn tick(&mut self) -> () {
+        if(self.cycle == 0) {
+            self.opcode = self.read(self.registers.pc as u16);
+            self.registers.pc += 1;
+
+            let instruction_data = self.instruction_set.get(&self.opcode).unwrap().to_owned();
+
+            self.cycle = instruction_data.cycles as i32;
+            
+            let additional_cycles1 = instruction_data.address_mode.handle(self);
+            let additional_cycles2 = instruction_data.operation(self);
+
+            self.cycle += (additional_cycles1 && additional_cycles2) as i32;
+        }
+        self.cycle -= 1;
+    }
 }
 
 impl DeviceOps for Cpu<'_> {
     fn read(&self, addr : u16 ) -> u8 {
-        match self.bus.clone() {
-            Some(bus_w) =>
-                if let Ok(ref_acquired) = bus_w.upgrade().unwrap().try_borrow_mut() {
-                    ref_acquired.read(addr)
-                } else { 0 }
-            None => panic!("Bus not connected"),
-        }
+        self.bus.as_ref().unwrap().borrow_mut()
+            .read(addr)
     }
     
     fn write(&mut self, addr : u16, data: u8) -> () {
-        match self.bus.clone() {
-            Some(bus_w) =>
-                bus_w.upgrade().unwrap().borrow_mut()
-                    .write(addr, data),
-            None => panic!("Bus not connected"),
-        }
+        self.bus.as_ref().unwrap().borrow_mut()
+            .write(addr, data)
     }
 }

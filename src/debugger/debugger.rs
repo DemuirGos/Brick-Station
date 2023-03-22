@@ -31,6 +31,7 @@ use super::disassembler::Disassembler;
 
 pub struct State<'a> {
     pub bus: Rc<RefCell<Bus<'a>>>,
+    pub cpu: Rc<RefCell<Cpu<'a>>>,
     pub program: Vec<String>,
 }
 
@@ -58,13 +59,13 @@ impl<'a> State<'a> {
         let mut cpu = Rc::new(RefCell::new(Cpu::new()));
         
         bus.borrow_mut().add_device(ram.clone());
-        bus.borrow_mut().connect_processor(cpu.clone());
 
-        (*cpu).borrow_mut().bus = Some(Rc::downgrade(&bus));
+        (*cpu).borrow_mut().bus = Some(bus.clone());
 
 
         let state = Rc::new(RefCell::new(State {
             bus : Rc::clone(&bus),
+            cpu : Rc::clone(&cpu),
             program: vec![],
         }));
 
@@ -263,7 +264,7 @@ impl<'a> State<'a> {
         };
 
         let local_app_state_deref = (*app.inner_machine_state).borrow_mut();
-        let cpu_local = local_app_state_deref.bus.borrow_mut().processor.clone().unwrap();
+        let cpu_local = local_app_state_deref.cpu.clone();
         let registers_list = build_registers_list(&cpu_local);
         f.render_widget(registers_list, chunks[1]);
         let status_list = build_status_view(&cpu_local);
@@ -383,8 +384,8 @@ impl<'a> State<'a> {
                         let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
                         // deep copy the state
                         app.previous_machine_state.push(app_state_local_val.clone());
-                        let mut bus_local_val = (*app_state_local_val.bus).borrow_mut();
-                        bus_local_val.tick();
+                        let mut cpu_local_val = (*app_state_local_val.cpu).borrow_mut();
+                        cpu_local_val.tick();
 
                         if app.program_list_index < ((*app_state_local_val).program.len() as i32) - 1 {
                             app.program_list_index += 1;
@@ -426,6 +427,7 @@ impl<'a> Clone for State<'a> {
     fn clone(&self) -> Self {
         State {
             program: self.program.clone(),
+            cpu: self.cpu.clone(),
             bus: self.bus.deref().borrow().clone_state(),
         }
     }
