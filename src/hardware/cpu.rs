@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}};
+use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::Weak, borrow::Borrow};
 
 use super::{
     registers::{Registers, Flag}, 
@@ -11,17 +11,17 @@ use super::{
     bus::Bus, opcodes::Opcode
 };
 
-pub struct Cpu {
+pub struct Cpu<'a> {
     pub registers : Registers,
-    pub bus       : Option<Box<Bus>>,
+    pub bus       : Option<Weak<RefCell<Bus<'a>>>>,
     pub cycle     : i32,
     pub opcode    : u8,
     pub address_mode : AddressingData,
     pub instruction_set : HashMap<u8, Instructions>
 } 
 
-impl Cpu {
-    pub fn new() -> Cpu {
+impl<'a> Cpu<'a> {
+    pub fn new() -> Cpu<'a> {
         let mut new_cpu = Cpu {
             registers : Registers::new(),
             bus       : Option::None,
@@ -78,26 +78,8 @@ impl Cpu {
         }
         self.registers.fetched
     }
-
-    pub fn tick(&mut self) -> () {
-        if(self.cycle == 0) {
-            self.opcode = self.read(self.registers.pc as u16);
-            self.registers.pc += 1;
-
-            let instruction_data = self.instruction_set.get(&self.opcode).unwrap().to_owned();
-
-            self.cycle = instruction_data.cycles as i32;
-            
-            let additional_cycles1 = instruction_data.address_mode.handle(self);
-            let additional_cycles2 = instruction_data.operation(self);
-
-            self.cycle += (additional_cycles1 && additional_cycles2) as i32;
-        }
-        self.cycle -= 1;
-    }
     
-    
-    pub fn connect_bus(&mut self, bus: Box<Bus>) -> () {
+    pub fn connect_bus(&'a mut self, bus: Weak<RefCell<Bus<'a>>>)  {
         self.bus = Option::Some(bus);
     }
 
@@ -125,14 +107,21 @@ impl Cpu {
     }
 }
 
-impl Device for Cpu {
+impl Device for Cpu<'_> {
     fn read(&self, addr : u16 ) -> u8 {
-        self.bus.as_ref().unwrap().read(addr)
+        match self.bus.clone() {
+            Some(bus_w) =>
+                bus_w.upgrade().unwrap().borrow_mut()
+                    .read(addr),
+            None => panic!("Bus not connected"),
+        }
     }
     
     fn write(&mut self, addr : u16, data: u8) -> () {
-        match self.bus {
-            Some(ref mut bus) => bus.write(addr, data),
+        match self.bus.clone() {
+            Some(bus_w) =>
+                bus_w.upgrade().unwrap().borrow_mut()
+                    .write(addr, data),
             None => panic!("Bus not connected"),
         }
     }

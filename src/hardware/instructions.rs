@@ -406,7 +406,7 @@ impl Instructions {
                 cpu_ref.registers.pc += 1;
                 cpu_ref.registers.set_flag(Flag::I, true);
                 
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, (cpu_ref.registers.pc as u8) >> 8);
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, ((cpu_ref.registers.pc >> 8) as u8));
                 cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 1, cpu_ref.registers.pc as u8);
                 cpu_ref.registers.sp -= 2;
 

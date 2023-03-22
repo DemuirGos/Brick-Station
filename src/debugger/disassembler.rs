@@ -3,7 +3,16 @@ use crate::hardware::bus::*;
 use crate::hardware::cpu::*;
 use crate::hardware::ram::*;
 
+use std::borrow::Borrow;
+use std::cell;
+use std::cell::RefCell;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::rc::Rc;
+use std::rc::Weak;
 use std::{io, io::Error};
+use crossterm::style::Print;
 use tui::Frame;
 use tui::backend::Backend;
 use tui::{backend::CrosstermBackend, Terminal};
@@ -18,20 +27,65 @@ use crossterm::{
     execute,
     terminal::*,
 };
-pub struct State {
-    pub ram: Ram,
-    pub bus: Bus,
-    pub cpu: Cpu,
+pub struct State<'a> {
+    pub bus: Rc<RefCell<Bus<'a>>>,
     pub program: Vec<String>,
 }
 
-pub struct App {
+pub struct App<'a> {
     pub memory_page_index: u16,
     pub program_counter: u16,
-    pub inner_machine_state: State,
+    pub previous_machine_state: Option<State<'a>>,
+    pub inner_machine_state: Rc<RefCell<State<'a>>>,
 }
 
-impl State {
+impl<'a> State<'a> {
+    pub fn initiate_state() -> Rc<RefCell<State<'a>>> {
+        let mut ram = Rc::new(RefCell::new(Ram::new()));
+        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let mut cpu = Rc::new(RefCell::new(Cpu::new()));
+        
+        bus.borrow_mut().add_device(ram.clone());
+        bus.borrow_mut().connect_processor(cpu.clone());
+
+        (*cpu).borrow_mut().bus = Some(Rc::downgrade(&bus));
+
+
+        let state = Rc::new(RefCell::new(State {
+            bus : Rc::clone(&bus),
+            program: vec![],
+        }));
+
+
+        state
+    }
+
+    pub fn load_program_from_file() -> Vec<u8> {
+        let prompt = "Enter a file name: ";
+        execute!(io::stdout(), Print(prompt));
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+
+        let mut metadata_file: File = File::options()
+            .read(true)
+            .open("instructions.txt").unwrap();
+
+        let reader = BufReader::new(metadata_file);
+        let mut butes = Vec::new();
+        for line in reader.lines() {
+            let line = line.unwrap();
+            let mut line = line.split_whitespace();
+            let instruction = line.next().unwrap();
+            let operand = line.next().unwrap();
+            let operand = operand.parse::<u8>().unwrap();
+            butes.push(instruction.as_bytes()[0]);
+            butes.push(operand);
+        }
+
+        butes
+    }
+
     pub fn start() -> Result<(), Error> {
         let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
@@ -40,15 +94,12 @@ impl State {
             Err(err) => return Err(err),
         };
 
+
         let mut app = App {
             memory_page_index: 0,
             program_counter: 0,
-            inner_machine_state: State {
-                ram: Ram::new(),
-                bus: Bus::new(),
-                cpu: Cpu::new(),
-                program: vec![],
-            },
+            inner_machine_state: State::initiate_state(),
+            previous_machine_state: None,
         };
 
         terminal.clear()?;
@@ -61,9 +112,36 @@ impl State {
 
             if let Ok(Event::Key(key)) = read() {
                 match key.code {
+                    KeyCode::Char('l') => {
+                        let program = State::load_program_from_file();
+                        let disassembled_program = State::disassemble(&program);
+                        let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
+                        app_state_local_val.program = disassembled_program;
+                    },
+                    KeyCode::Right => {
+                        // add 3 to register A
+                        let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
+                        let mut bus_local_val = (*app_state_local_val.bus).borrow_mut();
+
+                        // deep copy the state
+                        bus_local_val.tick();
+                    },
+                    KeyCode::Left => {
+                        // undo the last instruction
+                        if let Some(previous_state) = &app.previous_machine_state {
+                            let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
+                            let mut bus_local_val = (*app_state_local_val.bus).borrow_mut();
+
+                            // deep copy the state
+                            app.previous_machine_state = Some(State {
+                                bus: Rc::clone(&app_state_local_val.bus),
+                                program: app_state_local_val.program.clone(),
+                            });
+
+                            bus_local_val.tick();
+                        }
+                    },
                     KeyCode::Char('q') => break,
-                    KeyCode::Char('w') => app.memory_page_index = app.memory_page_index.wrapping_add(1),
-                    KeyCode::Char('s') => app.memory_page_index = app.memory_page_index.wrapping_sub(1),
                     _ => {}
                 }
             }
@@ -99,7 +177,7 @@ impl State {
         let block = Block::default().style(Style::default().bg(Color::White).fg(Color::Black));
         f.render_widget(block, size);
 
-        let build_page_table = |ram: &Ram, page: u16| {
+        let build_page_table = |bus: &Rc<RefCell<Bus>>, page: u16| {
             let header_cells = (0..=16)
                 .map(|i| format!("{:02X}", i))
                 .map(|s| Cell::from(s).style(Style::default().fg(Color::Red)));
@@ -115,7 +193,7 @@ impl State {
                 ];
                 for j in 0..16 {
                     let address = (page << 8) + (i * 16 + j);
-                    let value = ram.read(address);
+                    let value = bus.borrow_mut().read(address);
                     let cell = Cell::from(format!("{:04X}", value)).style(Style::default().fg(Color::Black));
                     row_data.push(cell);
                 }
@@ -154,7 +232,8 @@ impl State {
             .widths(&[Constraint::Percentage(100)]);
         f.render_widget(page_selection_table, chunks[0]);
         
-        let table = build_page_table(&app.inner_machine_state.ram, app.memory_page_index);
+        let local_app_state_deref = (*app.inner_machine_state).borrow_mut();
+        let table = build_page_table(&local_app_state_deref.bus, app.memory_page_index);
         f.render_widget(table, chunks[1]);
 
     }
@@ -183,7 +262,8 @@ impl State {
             list
         };
 
-        let program = app.inner_machine_state.program.clone();
+        let local_app_state_deref = (*app.inner_machine_state).borrow_mut();
+        let program = local_app_state_deref.program.clone();
         let list = build_program_list(program);
         f.render_widget(list, chunks[1]);
     }
@@ -200,14 +280,15 @@ impl State {
         f.render_widget(block, size);
 
         
-        let build_registers_list = |cpu: &Cpu| {
+        let build_registers_list = |cpu: &Rc<RefCell<Cpu>>| {
+            let cpu_local = cpu.borrow_mut();
             let list_elements = vec![
-                ListItem::new(Spans::from(vec![Span::raw(format!("A: {:02X}", cpu.registers.a))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("X: {:02X}", cpu.registers.x))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("Y: {:02X}", cpu.registers.y))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("PC: {:04X}", cpu.registers.pc))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("SP: {:02X}", cpu.registers.sp))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("P: {:02X}", cpu.registers.status))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!(" A: {:02X}", cpu_local.registers.a))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!(" X: {:02X}", cpu_local.registers.x))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!(" Y: {:02X}", cpu_local.registers.y))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("PC: {:04X}", cpu_local.registers.pc))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("SP: {:02X}", cpu_local.registers.sp))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!(" P: {:02X}", cpu_local.registers.status))])), 
             ];
             let list = List::new(list_elements)
                 .block(Block::default().borders(Borders::ALL).title("Registers"))
@@ -216,16 +297,17 @@ impl State {
             list
         };
 
-        let build_status_view = |cpu: &Cpu| {
+        let build_status_view = |cpu: &Rc<RefCell<Cpu>>| {
+            let cpu_local = cpu.borrow_mut();
             let list_elements = vec![
-                ListItem::new(Spans::from(vec![Span::raw(format!("N: {}", cpu.registers.get_flag(crate::hardware::registers::Flag::N)))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("V: {}", cpu.registers.get_flag(crate::hardware::registers::Flag::O)))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("B: {}", cpu.registers.get_flag(crate::hardware::registers::Flag::B)))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("D: {}", cpu.registers.get_flag(crate::hardware::registers::Flag::D)))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("I: {}", cpu.registers.get_flag(crate::hardware::registers::Flag::I)))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("Z: {}", cpu.registers.get_flag(crate::hardware::registers::Flag::Z)))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("C: {}", cpu.registers.get_flag(crate::hardware::registers::Flag::C)))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!("U: {}", cpu.registers.get_flag(crate::hardware::registers::Flag::U)))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("N: {}", cpu_local.registers.get_flag(crate::hardware::registers::Flag::N)))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("V: {}", cpu_local.registers.get_flag(crate::hardware::registers::Flag::O)))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("B: {}", cpu_local.registers.get_flag(crate::hardware::registers::Flag::B)))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("D: {}", cpu_local.registers.get_flag(crate::hardware::registers::Flag::D)))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("I: {}", cpu_local.registers.get_flag(crate::hardware::registers::Flag::I)))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("Z: {}", cpu_local.registers.get_flag(crate::hardware::registers::Flag::Z)))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("C: {}", cpu_local.registers.get_flag(crate::hardware::registers::Flag::C)))])), 
+                ListItem::new(Spans::from(vec![Span::raw(format!("U: {}", cpu_local.registers.get_flag(crate::hardware::registers::Flag::U)))])), 
 
             ];
             let list = List::new(list_elements)
@@ -235,9 +317,11 @@ impl State {
             list
         };
 
-        let registers_list = build_registers_list(&app.inner_machine_state.cpu);
+        let local_app_state_deref = (*app.inner_machine_state).borrow_mut();
+        let cpu_local = local_app_state_deref.bus.borrow_mut().processor.clone().unwrap();
+        let registers_list = build_registers_list(&cpu_local);
         f.render_widget(registers_list, chunks[1]);
-        let status_list = build_status_view(&app.inner_machine_state.cpu);
+        let status_list = build_status_view(&cpu_local);
         f.render_widget(status_list, chunks[0]);
 
     }
