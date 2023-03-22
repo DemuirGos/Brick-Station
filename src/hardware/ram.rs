@@ -1,5 +1,6 @@
-use super::interfaces::Device;
+use super::interfaces::{DeviceOps};
 
+#[derive(Debug, Clone, Copy)]
 pub struct Ram {
     pub data : [u8; 0xFFFF]
 }
@@ -11,7 +12,8 @@ impl Ram {
         }
     }
 }
-impl Device for Ram {
+
+impl DeviceOps for Ram {
     fn within_range(&self, addr: u16) -> bool {
         addr >= 0x0000 && addr <= 0xFFFF
     }

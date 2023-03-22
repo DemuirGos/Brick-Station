@@ -1,10 +1,10 @@
 use std::{ops::Range, cell::RefCell, rc::Rc};
 
-use super::{interfaces::Device, ram::Ram, cpu::Cpu};
+use super::{interfaces::{DeviceOps}, ram::Ram, cpu::Cpu, device::Device};
 
 pub struct Bus<'a> {
     pub processor: Option<Rc<RefCell<Cpu<'a>>>>,
-    pub devices : Vec<Rc<RefCell<dyn Device + 'a>>>
+    pub devices : Vec<Rc<RefCell<Device<'a>>>>
 }
 
 impl<'a> Bus<'a> {
@@ -23,7 +23,7 @@ impl<'a> Bus<'a> {
         self.processor = Some(processor);
     }
 
-    pub fn add_device(&mut self, device: Rc<RefCell<dyn Device>>) -> usize {
+    pub fn add_device(&mut self, device: Rc<RefCell<Device<'a>>>) -> usize {
         self.devices.push(device);
         self.devices.len()
     }
@@ -52,9 +52,30 @@ impl<'a> Bus<'a> {
         }
         self_processor.cycle -= 1;
     }
+
+    pub fn clone_state(&self) -> Rc<RefCell<Bus<'a>>> {
+        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let mut cpu = {
+            let mut cpu = self.processor.as_ref().unwrap().borrow_mut();
+            Rc::new(RefCell::new((*cpu).clone()))
+        };
+
+        for plugin in self.devices.iter() {
+            let mut device = plugin.borrow_mut().to_owned();
+            let mut device_clone = Rc::new(RefCell::new(device.clone()));
+            bus.borrow_mut().add_device(device_clone);
+        }
+
+        bus.borrow_mut().connect_processor(cpu.clone());
+
+        (*cpu).borrow_mut().bus = Some(Rc::downgrade(&bus));
+
+
+        bus
+    }
 }
 
-impl Device for Bus<'_> {
+impl DeviceOps for Bus<'_> {
     fn read(&self, addr: u16) -> u8 {
         self.devices.iter()
             .filter(|device| device.borrow().within_range(addr))

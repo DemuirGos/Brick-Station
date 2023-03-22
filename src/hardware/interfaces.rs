@@ -1,4 +1,6 @@
-pub trait Device {
+use std::{cell::RefCell, rc::Rc};
+
+pub trait DeviceOps {
     fn within_range(&self, _: u16) -> bool {
         true
     }

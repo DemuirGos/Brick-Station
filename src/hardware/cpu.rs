@@ -7,10 +7,11 @@ use super::{
         AddressMode, 
         AddressingData,
     }, 
-    interfaces::Device,
+    interfaces::{DeviceOps},
     bus::Bus, opcodes::Opcode
 };
 
+#[derive(Clone)]
 pub struct Cpu<'a> {
     pub registers : Registers,
     pub bus       : Option<Weak<RefCell<Bus<'a>>>>,
@@ -104,15 +105,24 @@ impl<'a> Cpu<'a> {
             );
             self.instruction_set.insert(instruction.opcode, instruction);
         });
+
+        // foreach index in 0..255 not in instruction_set add a default instruction
+        for i in 0..255 {
+            if !self.instruction_set.contains_key(&i) {
+                self.instruction_set.insert(i, Instructions::new(Opcode::NOP, i, 1, AddressMode::Imp));
+            }
+        }
+
     }
 }
 
-impl Device for Cpu<'_> {
+impl DeviceOps for Cpu<'_> {
     fn read(&self, addr : u16 ) -> u8 {
         match self.bus.clone() {
             Some(bus_w) =>
-                bus_w.upgrade().unwrap().borrow_mut()
-                    .read(addr),
+                if let Ok(ref_acquired) = bus_w.upgrade().unwrap().try_borrow_mut() {
+                    ref_acquired.read(addr)
+                } else { 0 }
             None => panic!("Bus not connected"),
         }
     }

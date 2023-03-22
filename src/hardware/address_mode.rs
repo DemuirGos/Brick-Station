@@ -1,5 +1,5 @@
 use super::cpu::Cpu;
-use super::interfaces::Device;
+use super::interfaces::DeviceOps;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AddressMode {

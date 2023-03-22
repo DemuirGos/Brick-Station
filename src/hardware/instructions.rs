@@ -1,4 +1,4 @@
-use super::{address_mode::AddressMode, cpu::{Cpu, self}, opcodes::Opcode, registers::Flag, interfaces::Device};
+use super::{address_mode::AddressMode, cpu::{Cpu, self}, opcodes::Opcode, registers::Flag, interfaces::DeviceOps};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instructions {
