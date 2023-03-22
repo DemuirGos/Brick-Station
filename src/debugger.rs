@@ -1,1 +1,1 @@
-pub mod dissassembler;
+pub mod disassembler;

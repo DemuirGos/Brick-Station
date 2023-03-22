@@ -35,18 +35,18 @@ impl AddressingData {
 impl AddressMode {
     pub fn from_str(s: &str) -> AddressMode {
         match s {
-            "Imp" => AddressMode::Imp,
-            "Imm" => AddressMode::Imm,
-            "Zp0" => AddressMode::Zp0,
-            "Zpx" => AddressMode::Zpx,
-            "Zpy" => AddressMode::Zpy,
-            "Rel" => AddressMode::Rel,
-            "Abs" => AddressMode::Abs,
-            "Abx" => AddressMode::Abx,
-            "Aby" => AddressMode::Aby,
-            "Ind" => AddressMode::Ind,
-            "Izx" => AddressMode::Izx,
-            "Izy" => AddressMode::Izy,
+            "IMP" => AddressMode::Imp,
+            "IMM" => AddressMode::Imm,
+            "ZP0" => AddressMode::Zp0,
+            "ZPX" => AddressMode::Zpx,
+            "ZPY" => AddressMode::Zpy,
+            "REL" => AddressMode::Rel,
+            "ABS" => AddressMode::Abs,
+            "ABX" => AddressMode::Abx,
+            "ABY" => AddressMode::Aby,
+            "IND" => AddressMode::Ind,
+            "IZX" => AddressMode::Izx,
+            "IZY" => AddressMode::Izy,
             _ => panic!("Invalid Address Mode: {}", s),
         }
     }
