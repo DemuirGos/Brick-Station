@@ -1,8 +1,8 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::Weak, borrow::Borrow};
+use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::Weak, borrow::Borrow, hash::Hash};
 
 use super::{
     registers::{Registers, Flag}, 
-    instructions::Instructions, 
+    instructions::{Instructions, self}, 
     address_mode::{
         AddressMode, 
         AddressingData,
@@ -29,9 +29,8 @@ impl<'a> Cpu<'a> {
             cycle     : 0,
             opcode    : 0,
             address_mode : AddressingData::new(),
-            instruction_set : HashMap::new(),
+            instruction_set : Cpu::setup_instruction_map(),
         };
-        new_cpu.setup();
         new_cpu
     }
 
@@ -84,13 +83,14 @@ impl<'a> Cpu<'a> {
         self.bus = Option::Some(bus);
     }
 
-    pub fn setup(&mut self) {
+    pub fn setup_instruction_map() -> HashMap<u8, Instructions> {
         let mut metadata_file: File = File::options()
             .read(true)
             .open("instructions.txt").unwrap();
     
         let reader = BufReader::new(metadata_file);
     
+        let mut instructions_set = HashMap::new();
         reader.split(b'\n').for_each(|line| {
             let line = line.unwrap();
             let tokens = line.split(|&c| c == b',')
@@ -103,16 +103,16 @@ impl<'a> Cpu<'a> {
                 tokens[3].parse::<u8>().unwrap(),
                 AddressMode::from_str(tokens[2])
             );
-            self.instruction_set.insert(instruction.opcode, instruction);
+            instructions_set.insert(instruction.opcode, instruction);
         });
 
         // foreach index in 0..255 not in instruction_set add a default instruction
         for i in 0..255 {
-            if !self.instruction_set.contains_key(&i) {
-                self.instruction_set.insert(i, Instructions::new(Opcode::NOP, i, 1, AddressMode::Imp));
+            if !instructions_set.contains_key(&i) {
+                instructions_set.insert(i, Instructions::new(Opcode::NOP, i, 1, AddressMode::Imp));
             }
         }
-
+        instructions_set
     }
 }
 

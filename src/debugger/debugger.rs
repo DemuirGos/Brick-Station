@@ -4,17 +4,13 @@ use crate::hardware::bus::*;
 use crate::hardware::cpu::*;
 use crate::hardware::ram::*;
 
-use std::borrow::Borrow;
-use std::cell;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::ErrorKind;
 use std::ops::Deref;
-use std::os::windows::prelude::FileExt;
 use std::rc::Rc;
-use std::rc::Weak;
 use std::{io, io::Error};
 use crossterm::style::Print;
 use tui::Frame;
@@ -29,7 +25,6 @@ use tui::{
 use crossterm::{
     event::*,
     execute,
-    terminal::*,
 };
 
 use super::disassembler::Disassembler;
@@ -41,11 +36,22 @@ pub struct State<'a> {
 
 pub struct App<'a> {
     pub memory_page_index: i32,
+    pub program_list_index: i32,
     pub previous_machine_state: Vec<State<'a>>,
     pub inner_machine_state: Rc<RefCell<State<'a>>>,
 }
 
 impl<'a> State<'a> {
+    pub fn build_view<B: Backend>(f: &mut Frame<B>, app: &App)  {
+        let size = Rect::new(0, 0, f.size().width, f.size().height);
+        let block = Block::default().style(Style::default().bg(Color::White).fg(Color::Black));
+        f.render_widget(block, size);
+
+        State::memory_viewer(f, app);
+        State::program_viewer(f, app);
+        State::processor_viewer(f, app);
+    }
+
     pub fn initiate_state() -> Rc<RefCell<State<'a>>> {
         let mut ram = Rc::new(RefCell::new(Device::Ram(Ram::new())));
         let mut bus = Rc::new(RefCell::new(Bus::new()));
@@ -101,102 +107,6 @@ impl<'a> State<'a> {
         }
         return Err(Error::new(ErrorKind::Other, "Error"))
 
-    }
-
-    pub fn start(program_path: String) -> Result<(), Error> {
-        let stdout = io::stdout();
-        let backend = CrosstermBackend::new(stdout);
-        let mut terminal = match Terminal::new(backend) {
-            Ok(it) => it,
-            Err(err) => return Err(err),
-        };
-
-
-        let mut app = App {
-            memory_page_index: 0,
-            inner_machine_state: State::initiate_state(),
-            previous_machine_state: Vec::new(),
-        };
-
-        terminal.clear()?;
-        terminal.hide_cursor()?;
-
-        let x_dimension = terminal.size().unwrap().width;
-        let y_dimension = terminal.size().unwrap().height;
-        
-        terminal.resize(Rect {
-            x : 0, 
-            y : 0, 
-            width: x_dimension, 
-            height: y_dimension - 1
-        });
-
-        loop {
-            terminal.draw(|f| {
-                State::build_view(f, &app);
-            });
-
-            if let Ok(Event::Key(key)) = read() {
-                match key.code {
-                    KeyCode::PageUp => {
-                        app.memory_page_index = (app.memory_page_index + 1) % 0xFF;
-                    },
-                    KeyCode::PageDown => {
-                        if app.memory_page_index == 0 {
-                            app.memory_page_index = 0xFF -1;
-                        } else {
-                            app.memory_page_index = (app.memory_page_index - 1) % 0xFF;
-                        }
-                    },
-                    KeyCode::Char('r') => {
-                        if let Ok(program) = State::load_program_from_file(Some(program_path.clone()))
-                        {
-                            for (i, byte) in program.iter().enumerate() {
-                                app.write((0x8000 + i as u16) as u16, *byte - 48);
-                            }
-
-                            let disassembled_program = Disassembler::disassemble(&program);
-                            let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
-                            app_state_local_val.program = disassembled_program;
-                        }
-                    },
-                    KeyCode::Right => {
-                        // add 3 to register A
-                        let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
-                        
-                        // deep copy the state
-                        app.previous_machine_state.push(app_state_local_val.clone());
-                        let mut bus_local_val = (*app_state_local_val.bus).borrow_mut();
-                        bus_local_val.tick();
-                    },
-                    KeyCode::Left => {
-                        if let Some(previous_state) = &app.previous_machine_state.pop() {
-                            app.inner_machine_state = Rc::new(RefCell::new(((*previous_state).clone())));
-                        }
-                    },
-                    KeyCode::Char('q') => break,
-                    _ => {}
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn build_view<B: Backend>(f: &mut Frame<B>, app: &App)  {
-        let size = Rect::new(0, 0, f.size().width, f.size().height);
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .margin(5)
-            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
-            .split(size);
-
-        let block = Block::default().style(Style::default().bg(Color::White).fg(Color::Black));
-        f.render_widget(block, size);
-
-        State::memory_viewer(f, app);
-        State::program_viewer(f, app);
-        State::processor_viewer(f, app);
     }
 
     pub fn memory_viewer<B: Backend>(f: &mut Frame<B>, app: &App)  {
@@ -289,36 +199,6 @@ impl<'a> State<'a> {
 
     }
 
-    pub fn program_viewer<B: Backend>(f: &mut Frame<B>, app: &App)  {
-        let size = Rect::new((f.size().width as f32 * 0.70) as u16, (f.size().height as f32 * 0.31) as u16, (f.size().width as f32 * 0.30) as u16, (f.size().height as f32 * 0.69) as u16);
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .margin(5)
-            .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
-            .split(size);
-
-        let block = Block::default().style(Style::default().bg(Color::White).fg(Color::Black));
-        f.render_widget(block, size);
-
-        
-        let build_program_list = |program: Vec<String>| {
-            let list_elements = program
-                .into_iter()
-                .map(|s| ListItem::new(Spans::from(vec![Span::raw(s)])))
-                .collect::<Vec<ListItem>>();
-            let list = List::new(list_elements)
-                .block(Block::default().borders(Borders::ALL).title("Program"))
-                .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
-                .highlight_symbol(">> ");
-            list
-        };
-
-        let local_app_state_deref = (*app.inner_machine_state).borrow_mut();
-        let program = local_app_state_deref.program.clone();
-        let list = build_program_list(program);
-        f.render_widget(list, chunks[1]);
-    }
-
     pub fn processor_viewer<B: Backend>(f: &mut Frame<B>, app: &App)  {
         let size = Rect::new((f.size().width as f32 * 0.70) as u16, 0, (f.size().width as f32 * 0.30) as u16, (f.size().height as f32 * 0.60) as u16);
         let chunks = Layout::default()
@@ -375,6 +255,144 @@ impl<'a> State<'a> {
         let status_list = build_status_view(&cpu_local);
         f.render_widget(status_list, chunks[0]);
 
+    }
+
+    pub fn program_viewer<B: Backend>(f: &mut Frame<B>, app: &App)  {
+        let size = Rect::new((f.size().width as f32 * 0.70) as u16, (f.size().height as f32 * 0.31) as u16, (f.size().width as f32 * 0.30) as u16, (f.size().height as f32 * 0.69) as u16);
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(5)
+            .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
+            .split(size);
+
+        let block = Block::default().style(Style::default().bg(Color::White).fg(Color::Black));
+        f.render_widget(block, size);
+
+        
+        let build_program_list = |program: Vec<String>| {
+
+            let program_counter = app.program_list_index;
+
+            let (start, count) = {
+                let max_count = 15;
+                let program_len = program.len() as i32;
+                let range_start = program_counter / max_count;
+
+                let start_region = range_start * max_count;
+                let count = if start_region + max_count > program_len {
+                    program_len - start_region
+                } else {
+                    max_count
+                };
+
+                (start_region, count)
+            };
+
+            let list_elements = program
+                .into_iter()
+                .enumerate()
+                .skip(start as usize)
+                .take(count as usize)
+                .map(|s| ListItem::new(Spans::from(
+                    if s.0 == program_counter as usize {
+                        vec![Span::raw(format!("> {}", s.1))]
+                    } else {
+                        vec![Span::raw(format!("  {}", s.1))]
+                    }
+                )))
+                .collect::<Vec<ListItem>>();
+            let list = List::new(list_elements)
+                .block(Block::default().borders(Borders::ALL).title("Program"))
+                .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+                .highlight_symbol(">> ");
+            list
+        };
+
+        let local_app_state_deref = (*app.inner_machine_state).borrow_mut();
+        let program = local_app_state_deref.program.clone();
+        let list = build_program_list(program);
+        f.render_widget(list, chunks[1]);
+    }
+
+    pub fn start(program_path: String) -> Result<(), Error> {
+        let stdout = io::stdout();
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = match Terminal::new(backend) {
+            Ok(it) => it,
+            Err(err) => return Err(err),
+        };
+
+
+        let mut app = App {
+            program_list_index : 0,
+            memory_page_index: 0,
+            inner_machine_state: State::initiate_state(),
+            previous_machine_state: Vec::new(),
+        };
+
+        terminal.clear()?;
+        terminal.hide_cursor()?;
+        
+        loop {
+            terminal.draw(|f| State::build_view(f, &app));
+
+            if let Ok(Event::Key(key)) = read() {
+                match key.code {
+                    KeyCode::PageUp => {
+                        app.memory_page_index = (app.memory_page_index + 1) % 0xFF;
+                    },
+                    KeyCode::PageDown => {
+                        if app.memory_page_index == 0 {
+                            app.memory_page_index = 0xFF -1;
+                        } else {
+                            app.memory_page_index = (app.memory_page_index - 1) % 0xFF;
+                        }
+                    },
+                    KeyCode::Char('r') => {
+                        if let Ok(program) = State::load_program_from_file(Some(program_path.clone()))
+                        {
+                            for (i, byte) in program.iter().enumerate() {
+                                app.write((0x8000 + i as u16) as u16, *byte - 48);
+                            }
+
+                            let disassembled_program = Disassembler::disassemble(&program);
+
+                            let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
+                            app_state_local_val.program = disassembled_program;
+                        }
+                    },
+                    KeyCode::Right => {
+                        if app.program_list_index >= ((*app.inner_machine_state).borrow_mut().program.len() as i32) - 1 {
+                            continue;
+                        }
+                        // add 3 to register A
+                        let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
+                        // deep copy the state
+                        app.previous_machine_state.push(app_state_local_val.clone());
+                        let mut bus_local_val = (*app_state_local_val.bus).borrow_mut();
+                        bus_local_val.tick();
+
+                        if app.program_list_index < ((*app_state_local_val).program.len() as i32) - 1 {
+                            app.program_list_index += 1;
+                        }
+                    },
+                    KeyCode::Left => {
+                        if let Some(previous_state) = &app.previous_machine_state.pop() {
+                            app.inner_machine_state = Rc::new(RefCell::new(((*previous_state).clone())));
+                            app.program_list_index = if app.program_list_index > 1 { 
+                                app.program_list_index - 1
+                            } else {
+                                0
+                            }
+                        }
+                    },
+                    KeyCode::Char('q') => break,
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

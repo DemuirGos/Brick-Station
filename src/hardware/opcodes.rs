@@ -1,3 +1,5 @@
+use std::{fmt::Display};
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Opcode {
@@ -75,6 +77,69 @@ impl Opcode {
             "BEQ" => Opcode::BEQ,
             "SED" => Opcode::SED,
             _ => panic!("Invalid opcode: {}", word),
+        }
+    }
+}
+
+impl Display for Opcode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Opcode::BRK => write!(f, "BRK"),
+            Opcode::ORA => write!(f, "ORA"),
+            Opcode::ASL => write!(f, "ASL"),
+            Opcode::PHP => write!(f, "PHP"),
+            Opcode::BPL => write!(f, "BPL"),
+            Opcode::CLC => write!(f, "CLC"),
+            Opcode::JSR => write!(f, "JSR"),
+            Opcode::AND => write!(f, "AND"),
+            Opcode::BIT => write!(f, "BIT"),
+            Opcode::ROL => write!(f, "ROL"),
+            Opcode::PLP => write!(f, "PLP"),
+            Opcode::BMI => write!(f, "BMI"),
+            Opcode::SEC => write!(f, "SEC"),
+            Opcode::RTI => write!(f, "RTI"),
+            Opcode::EOR => write!(f, "EOR"),
+            Opcode::LSR => write!(f, "LSR"),
+            Opcode::PHA => write!(f, "PHA"),
+            Opcode::JMP => write!(f, "JMP"),
+            Opcode::BVC => write!(f, "BVC"),
+            Opcode::CLI => write!(f, "CLI"),
+            Opcode::RTS => write!(f, "RTS"),
+            Opcode::ADC => write!(f, "ADC"),
+            Opcode::ROR => write!(f, "ROR"),
+            Opcode::PLA => write!(f, "PLA"),
+            Opcode::BVS => write!(f, "BVS"),
+            Opcode::SEI => write!(f, "SEI"),
+            Opcode::STA => write!(f, "STA"),
+            Opcode::STY => write!(f, "STY"),
+            Opcode::STX => write!(f, "STX"),
+            Opcode::DEY => write!(f, "DEY"),
+            Opcode::TXA => write!(f, "TXA"),
+            Opcode::BCC => write!(f, "BCC"),
+            Opcode::TYA => write!(f, "TYA"),
+            Opcode::TXS => write!(f, "TXS"),
+            Opcode::LDY => write!(f, "LDY"),
+            Opcode::LDA => write!(f, "LDA"),
+            Opcode::LDX => write!(f, "LDX"),
+            Opcode::TAY => write!(f, "TAY"),
+            Opcode::TAX => write!(f, "TAX"),
+            Opcode::BCS => write!(f, "BCS"),
+            Opcode::CLV => write!(f, "CLV"),
+            Opcode::TSX => write!(f, "TSX"),
+            Opcode::CPY => write!(f, "CPY"),    
+            Opcode::CMP => write!(f, "CMP"),
+            Opcode::DEC => write!(f, "DEC"),
+            Opcode::INY => write!(f, "INY"),
+            Opcode::DEX => write!(f, "DEX"),
+            Opcode::BNE => write!(f, "BNE"),
+            Opcode::CLD => write!(f, "CLD"),
+            Opcode::NOP => write!(f, "NOP"),
+            Opcode::CPX => write!(f, "CPX"),
+            Opcode::SBC => write!(f, "SBC"),
+            Opcode::INC => write!(f, "INC"),
+            Opcode::INX => write!(f, "INX"),
+            Opcode::BEQ => write!(f, "BEQ"),
+            Opcode::SED => write!(f, "SED"),
         }
     }
 }
