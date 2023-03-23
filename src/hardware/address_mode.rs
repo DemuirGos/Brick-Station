@@ -95,8 +95,10 @@ impl AddressMode {
                 cpu_ref.registers.pc += 1;
                 let hi = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
                 cpu_ref.registers.pc += 1;
+
                 cpu_ref.address_mode.address_abs  = (hi << 8) | lo;
                 cpu_ref.address_mode.address_abs += cpu_ref.registers.x as u16;
+                
                 if cpu_ref.address_mode.address_abs & 0xFF00 != (hi << 8).into() {
                     true
                 }
@@ -109,8 +111,10 @@ impl AddressMode {
                 cpu_ref.registers.pc += 1;
                 let hi = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
                 cpu_ref.registers.pc += 1;
+
                 cpu_ref.address_mode.address_abs  = (hi << 8) | lo;
                 cpu_ref.address_mode.address_abs += cpu_ref.registers.y as u16;
+                
                 if cpu_ref.address_mode.address_abs & 0xFF00 != (hi << 8).into() {
                     true
                 }
@@ -123,9 +127,10 @@ impl AddressMode {
                 cpu_ref.registers.pc += 1;
                 let hi = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
                 cpu_ref.registers.pc += 1;
+
                 let ptr = (hi << 8) | lo;
                 let hi_ptr = if lo == 0x00ff { ptr & 0xff00 } else { ptr + 1 };
-                cpu_ref.address_mode.address_abs = (cpu_ref.read(hi_ptr) as u16) << 8 | (cpu_ref.read(ptr) as u16);
+                cpu_ref.address_mode.address_abs = ((cpu_ref.read(hi_ptr) as u16) << 8) | (cpu_ref.read(ptr) as u16);
                 false
             },
             AddressMode::Izx => {

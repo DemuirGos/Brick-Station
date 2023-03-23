@@ -35,6 +35,7 @@ impl Instructions {
             cpu_ref.registers.pc = cpu_ref.address_mode.address_abs;
         };
 
+        cpu_ref.opcode = self.opcode;
         match self.mnemonic {
             Opcode::ADC => {
                 cpu_ref.fetch();

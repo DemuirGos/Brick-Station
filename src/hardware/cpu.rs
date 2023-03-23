@@ -72,7 +72,7 @@ impl<'a> Cpu<'a> {
     pub fn fetch(&mut self) -> u8 {
         let opcode_metadata = self.instruction_set.get(&self.opcode);
         if let Some(metadata) = opcode_metadata {
-            if metadata.address_mode == AddressMode::Imm {
+            if metadata.address_mode != AddressMode::Imp {
                 self.registers.fetched = self.read(self.address_mode.address_abs);
             }
         }
