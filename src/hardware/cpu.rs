@@ -1,8 +1,8 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::{Weak, Rc}, borrow::Borrow, hash::Hash, ops::Deref};
+use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::Rc};
 
 use super::{
     registers::{Registers, Flag}, 
-    instructions::{Instructions, self}, 
+    instructions::{Instructions}, 
     address_mode::{
         AddressMode, 
         AddressingData,
@@ -23,7 +23,7 @@ pub struct Cpu<'a> {
 
 impl<'a> Cpu<'a> {
     pub fn new() -> Cpu<'a> {
-        let mut new_cpu = Cpu {
+        let new_cpu = Cpu {
             registers : Registers::new(),
             bus       : None,
             cycle     : 0,
@@ -48,7 +48,7 @@ impl<'a> Cpu<'a> {
     }
 
     pub fn interrupt(&mut self, is_non_maskable: bool) -> () {
-        if(!self.registers.get_flag(Flag::I) || is_non_maskable) {
+        if !self.registers.get_flag(Flag::I) || is_non_maskable {
             self.write(0x0100 + self.registers.sp as u16 + 0 , (self.registers.pc >> 8) as u8);
             self.write(0x0100 + self.registers.sp as u16 - 1 , self.registers.pc  as u8);
             self.registers.sp -= 2;
@@ -84,7 +84,7 @@ impl<'a> Cpu<'a> {
     }
 
     pub fn setup_instruction_map() -> HashMap<u8, Instructions> {
-        let mut metadata_file: File = File::options()
+        let metadata_file: File = File::options()
             .read(true)
             .open("instructions.txt").unwrap();
     
@@ -112,11 +112,12 @@ impl<'a> Cpu<'a> {
                 instructions_set.insert(i, Instructions::new(Opcode::NOP, i, 1, AddressMode::Imp));
             }
         }
+
         instructions_set
     }
 
     pub fn tick(&mut self) -> () {
-        if(self.cycle == 0) {
+        if self.cycle == 0 {
             self.opcode = self.read(self.registers.pc as u16);
             self.registers.pc += 1;
 

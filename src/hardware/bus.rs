@@ -1,6 +1,6 @@
-use std::{ops::Range, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use super::{interfaces::{DeviceOps}, ram::Ram, cpu::Cpu, device::Device};
+use super::{interfaces::{DeviceOps}, device::Device};
 
 pub struct Bus<'a> {
     pub devices : Vec<Rc<RefCell<Device<'a>>>>
@@ -13,7 +13,7 @@ impl<'a> Bus<'a> {
         }
     }
 
-    pub fn load_program(&mut self, program: Vec<u8>) {
+    pub fn load_program(&mut self, _: Vec<u8>) {
         
     }
 
@@ -30,11 +30,11 @@ impl<'a> Bus<'a> {
     }
 
     pub fn clone_state(&self) -> Rc<RefCell<Bus<'a>>> {
-        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let bus = Rc::new(RefCell::new(Bus::new()));
 
         for plugin in self.devices.iter() {
-            let mut device = plugin.borrow_mut().to_owned();
-            let mut device_clone = Rc::new(RefCell::new(device.clone()));
+            let device = plugin.borrow_mut().to_owned();
+            let device_clone = Rc::new(RefCell::new(device.clone()));
             bus.borrow_mut().add_device(device_clone);
         }
 

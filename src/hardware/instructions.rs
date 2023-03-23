@@ -1,4 +1,4 @@
-use super::{address_mode::AddressMode, cpu::{Cpu, self}, opcodes::Opcode, registers::Flag, interfaces::DeviceOps};
+use super::{address_mode::AddressMode, cpu::Cpu, opcodes::Opcode, registers::Flag, interfaces::DeviceOps};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instructions {
@@ -21,8 +21,14 @@ impl Instructions {
     pub fn operation(&self, cpu_ref: &mut Cpu) -> bool {
         let jump_to_relative_address = |cpu_ref: &mut Cpu| {
             cpu_ref.cycle += 1;
-            cpu_ref.address_mode.address_abs = cpu_ref.registers.pc as u16 + cpu_ref.address_mode.address_rel;
-            if(cpu_ref.registers.pc >> 8 != cpu_ref.address_mode.address_abs >> 8) {
+
+            let value = {
+                let target_address = (cpu_ref.address_mode.address_rel & 0x00FF) as i8;
+                cpu_ref.registers.pc as i16 + (target_address as i16)
+            } as u16;
+            
+            cpu_ref.address_mode.address_abs = value;
+            if cpu_ref.registers.pc >> 8 != cpu_ref.address_mode.address_abs >> 8 {
                 cpu_ref.cycle += 1;
             }
 
@@ -139,52 +145,52 @@ impl Instructions {
                 false
             },
             Opcode::BCC => {
-                if(!cpu_ref.registers.get_flag(Flag::C)) {
+                if !cpu_ref.registers.get_flag(Flag::C) {
                     jump_to_relative_address(cpu_ref);
                 }
 
                 false
             },
             Opcode::BCS => {
-                if(cpu_ref.registers.get_flag(Flag::C)) {
+                if cpu_ref.registers.get_flag(Flag::C) {
                     jump_to_relative_address(cpu_ref);
                 }
 
                 false
             },
             Opcode::BEQ => {
-                if(cpu_ref.registers.get_flag(Flag::Z)) {
+                if cpu_ref.registers.get_flag(Flag::Z) {
                     jump_to_relative_address(cpu_ref);
                 }
 
                 false
             },
             Opcode::BNE => {
-                if(!cpu_ref.registers.get_flag(Flag::Z)) {
+                if !cpu_ref.registers.get_flag(Flag::Z) {
                     jump_to_relative_address(cpu_ref);
                 }
                 false
             },
             Opcode::BMI => {
-                if(cpu_ref.registers.get_flag(Flag::N)) {
+                if cpu_ref.registers.get_flag(Flag::N) {
                     jump_to_relative_address(cpu_ref);
                 }
                 false
             },
             Opcode::BPL => {
-                if(!cpu_ref.registers.get_flag(Flag::N)) {
+                if !cpu_ref.registers.get_flag(Flag::N) {
                     jump_to_relative_address(cpu_ref);
                 }
                 false
             },
             Opcode::BVC => {
-                if(!cpu_ref.registers.get_flag(Flag::O)) {
+                if !cpu_ref.registers.get_flag(Flag::O) {
                     jump_to_relative_address(cpu_ref);
                 }
                 false
             },
             Opcode::BVS => {
-                if(cpu_ref.registers.get_flag(Flag::O)) {
+                if cpu_ref.registers.get_flag(Flag::O) {
                     jump_to_relative_address(cpu_ref);
                 }
                 false
@@ -205,15 +211,11 @@ impl Instructions {
                 cpu_ref.registers.set_flag(Flag::O, false);
                 false
             },
-            Opcode::CLV => {
-                cpu_ref.registers.set_flag(Flag::O, false);
-                false
-            },
             Opcode::CMP => {
                 cpu_ref.fetch();
                 
                 let value = cpu_ref.registers.a as u16 - cpu_ref.registers.fetched as u16;
-                cpu_ref.registers.set_flag(Flag::C, value >= 0);
+                cpu_ref.registers.set_flag(Flag::C, cpu_ref.registers.a >= cpu_ref.registers.fetched);
                 cpu_ref.registers.set_flag(Flag::Z, value == 0);
                 cpu_ref.registers.set_flag(Flag::N, value & 0x0080 != 0);
 
@@ -223,7 +225,7 @@ impl Instructions {
                 cpu_ref.fetch();
                 
                 let value = cpu_ref.registers.x as u16 - cpu_ref.registers.fetched as u16;
-                cpu_ref.registers.set_flag(Flag::C, value >= 0);
+                cpu_ref.registers.set_flag(Flag::C, cpu_ref.registers.x >= cpu_ref.registers.fetched);
                 cpu_ref.registers.set_flag(Flag::Z, value == 0);
                 cpu_ref.registers.set_flag(Flag::N, value & 0x0080 != 0);
 
@@ -233,7 +235,7 @@ impl Instructions {
                 cpu_ref.fetch();
                 
                 let value = cpu_ref.registers.y as u16 - cpu_ref.registers.fetched as u16;
-                cpu_ref.registers.set_flag(Flag::C, value >= 0);
+                cpu_ref.registers.set_flag(Flag::C, cpu_ref.registers.y >= cpu_ref.registers.fetched);
                 cpu_ref.registers.set_flag(Flag::Z, value == 0);
                 cpu_ref.registers.set_flag(Flag::N, value & 0x0080 != 0);
 
@@ -269,14 +271,14 @@ impl Instructions {
             },
             Opcode::DEY => {
                 cpu_ref.registers.y -= 1;
-                cpu_ref.registers.set_flag(Flag::Z, cpu_ref.registers.x == 0);
-                cpu_ref.registers.set_flag(Flag::N, cpu_ref.registers.x & 0x0080 != 0);
+                cpu_ref.registers.set_flag(Flag::Z, cpu_ref.registers.y == 0);
+                cpu_ref.registers.set_flag(Flag::N, cpu_ref.registers.y & 0x0080 != 0);
                 false
             },
             Opcode::INY => {
                 cpu_ref.registers.y += 1;
-                cpu_ref.registers.set_flag(Flag::Z, cpu_ref.registers.x == 0);
-                cpu_ref.registers.set_flag(Flag::N, cpu_ref.registers.x & 0x0080 != 0);
+                cpu_ref.registers.set_flag(Flag::Z, cpu_ref.registers.y == 0);
+                cpu_ref.registers.set_flag(Flag::N, cpu_ref.registers.y & 0x0080 != 0);
                 false
             },
             Opcode::EOR => {
@@ -406,7 +408,7 @@ impl Instructions {
                 cpu_ref.registers.pc += 1;
                 cpu_ref.registers.set_flag(Flag::I, true);
                 
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, ((cpu_ref.registers.pc >> 8) as u8));
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, (cpu_ref.registers.pc >> 8) as u8);
                 cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 1, cpu_ref.registers.pc as u8);
                 cpu_ref.registers.sp -= 2;
 
@@ -416,7 +418,7 @@ impl Instructions {
                 cpu_ref.registers.set_flag(Flag::B, false);
 
                 let lo = cpu_ref.read(0xFFFE) as u16;
-                let hi = cpu_ref.read(0xFFFE + 1) as u16;
+                let hi = cpu_ref.read(0xFFFF) as u16;
                 cpu_ref.registers.pc += (hi << 8) | lo;
 
                 false
@@ -456,7 +458,6 @@ impl Instructions {
                 cpu_ref.registers.pc = (hi << 8) | lo; 
                 false
             }
-            _ => false 
         }
     }
 }

@@ -32,12 +32,11 @@ use super::disassembler::Disassembler;
 pub struct State<'a> {
     pub bus: Rc<RefCell<Bus<'a>>>,
     pub cpu: Rc<RefCell<Cpu<'a>>>,
-    pub program: Vec<String>,
+    pub dis: Disassembler
 }
 
 pub struct App<'a> {
     pub memory_page_index: i32,
-    pub program_list_index: i32,
     pub previous_machine_state: Vec<State<'a>>,
     pub inner_machine_state: Rc<RefCell<State<'a>>>,
 }
@@ -54,9 +53,9 @@ impl<'a> State<'a> {
     }
 
     pub fn initiate_state() -> Rc<RefCell<State<'a>>> {
-        let mut ram = Rc::new(RefCell::new(Device::Ram(Ram::new())));
-        let mut bus = Rc::new(RefCell::new(Bus::new()));
-        let mut cpu = Rc::new(RefCell::new(Cpu::new()));
+        let ram = Rc::new(RefCell::new(Device::Ram(Ram::new())));
+        let bus = Rc::new(RefCell::new(Bus::new()));
+        let cpu = Rc::new(RefCell::new(Cpu::new()));
         
         bus.borrow_mut().add_device(ram.clone());
 
@@ -66,7 +65,7 @@ impl<'a> State<'a> {
         let state = Rc::new(RefCell::new(State {
             bus : Rc::clone(&bus),
             cpu : Rc::clone(&cpu),
-            program: vec![],
+            dis : Disassembler::new()
         }));
 
         
@@ -88,7 +87,7 @@ impl<'a> State<'a> {
                                                     .open(path.trim())
             {
                 // readlines 
-                let mut reader = BufReader::new(metadata_file);
+                let reader = BufReader::new(metadata_file);
                 let mut lines = Vec::new();
                 let mut bytes = Vec::new();
                 for line in reader.lines() {
@@ -195,7 +194,7 @@ impl<'a> State<'a> {
         
         let mut rows_vec = Vec::new();
         rows_vec.push(Row::new([Cell::from("[ Pages ]")]));
-        let page_cells = (lower_bound..upper_bound)
+        (lower_bound..upper_bound)
             .map(|i| format!("[{}{:02X}]", if i == app.memory_page_index { ">>" } else { "" } ,i))
             .map(|s| Span::styled(s, Style::default().fg(Color::LightBlue)))
             .map(|s| Row::new([s]).height(2))
@@ -284,32 +283,32 @@ impl<'a> State<'a> {
         f.render_widget(block, size);
 
         
-        let build_program_list = |program: Vec<String>| {
-
-            let program_counter = app.program_list_index;
-
-            let (start, count) = {
-                let max_count = 15;
-                let program_len = program.len() as i32;
-                let range_start = program_counter / max_count;
-
-                let start_region = range_start * max_count;
-                let count = if start_region + max_count > program_len {
-                    program_len - start_region
+        let build_program_list = |program_counter: i32, dis: Disassembler| {
+            let (counter, start, end) = {
+                let program_len = dis.program.len();
+                let max_count = 15 as usize;
+                if let Some(program_counter) = dis.counters.get(&program_counter) {
+    
+                    let range_start = program_counter / max_count;
+                    let start_region = range_start * max_count;
+                    let count = if start_region + max_count >= program_len  {
+                        (program_len as i32 - start_region as i32) as usize
+                    } else {
+                        max_count as usize
+                    };
+                    (*program_counter, start_region, count)
                 } else {
-                    max_count
-                };
-
-                (start_region, count)
+                    (0, 0, program_len.min(max_count))
+                }
             };
 
-            let list_elements = program
+            let list_elements = dis.program
                 .into_iter()
                 .enumerate()
                 .skip(start as usize)
-                .take(count as usize)
+                .take(end as usize)
                 .map(|s| ListItem::new(Spans::from(
-                    if s.0 == program_counter as usize {
+                    if s.0 == counter  {
                         vec![Span::raw(format!("> {}", s.1))]
                     } else {
                         vec![Span::raw(format!("  {}", s.1))]
@@ -324,8 +323,8 @@ impl<'a> State<'a> {
         };
 
         let local_app_state_deref = (*app.inner_machine_state).borrow_mut();
-        let program = local_app_state_deref.program.clone();
-        let list = build_program_list(program);
+        let program = local_app_state_deref.dis.clone();
+        let list = build_program_list((local_app_state_deref.cpu.borrow().registers.pc) as i32, program);
         f.render_widget(list, chunks[1]);
     }
 
@@ -339,7 +338,6 @@ impl<'a> State<'a> {
 
 
         let mut app = App {
-            program_list_index : 0,
             memory_page_index: 0,
             inner_machine_state: State::initiate_state(),
             previous_machine_state: Vec::new(),
@@ -349,7 +347,7 @@ impl<'a> State<'a> {
         terminal.hide_cursor()?;
         
         loop {
-            terminal.draw(|f| State::build_view(f, &app));
+            terminal.draw(|f| State::build_view(f, &app))?;
 
             if let Ok(Event::Key(key)) = read() {
                 match key.code {
@@ -363,7 +361,7 @@ impl<'a> State<'a> {
                             app.memory_page_index = (app.memory_page_index - 1) % 0xFF;
                         }
                     },
-                    KeyCode::Char('r') => {
+                    KeyCode::Enter => {
                         if let Ok(program) = State::load_program_from_file(Some(program_path.clone()))
                         {
                             for (i, byte) in program.iter().enumerate() {
@@ -373,35 +371,26 @@ impl<'a> State<'a> {
                             let disassembled_program = Disassembler::disassemble(&program);
 
                             let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
-                            app_state_local_val.program = disassembled_program;
+                            app_state_local_val.dis = disassembled_program;
                         }
                     },
-                    KeyCode::Right => {
-                        if app.program_list_index >= ((*app.inner_machine_state).borrow_mut().program.len() as i32) - 1 {
-                            continue;
-                        }
+                    KeyCode::Tab => {
                         // add 3 to register A
-                        let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
+                        let app_state_local_val = (*app.inner_machine_state).borrow_mut();
                         // deep copy the state
                         app.previous_machine_state.push(app_state_local_val.clone());
                         let mut cpu_local_val = (*app_state_local_val.cpu).borrow_mut();
                         cpu_local_val.tick();
-
-                        if app.program_list_index < ((*app_state_local_val).program.len() as i32) - 1 {
-                            app.program_list_index += 1;
-                        }
                     },
-                    KeyCode::Left => {
+                    KeyCode::Backspace => {
                         if let Some(previous_state) = &app.previous_machine_state.pop() {
-                            app.inner_machine_state = Rc::new(RefCell::new(((*previous_state).clone())));
-                            app.program_list_index = if app.program_list_index > 1 { 
-                                app.program_list_index - 1
-                            } else {
-                                0
-                            }
+                            app.inner_machine_state = Rc::new(RefCell::new((*previous_state).clone()));
+                            let cpu_ref_local = (*app.inner_machine_state).borrow_mut().cpu.clone();
+                            let bus = (*app.inner_machine_state).borrow_mut().bus.clone();
+                            (*cpu_ref_local).borrow_mut().bus = Some(bus.clone());
                         }
                     },
-                    KeyCode::Char('q') => break,
+                    KeyCode::Esc => break,
                     _ => {}
                 }
             }
@@ -413,21 +402,22 @@ impl<'a> State<'a> {
 
 impl DeviceOps for App<'_> {
     fn read(&self, address: u16) -> u8 {
-        let mut local_app_state_deref = (*self.inner_machine_state).borrow_mut();
+        let local_app_state_deref = (*self.inner_machine_state).borrow_mut();
         let x = local_app_state_deref.bus.borrow_mut().read(address); x
     }
 
     fn write(&mut self, address: u16, data: u8) {
-        let mut local_app_state_deref = (*self.inner_machine_state).borrow_mut();
+        let local_app_state_deref = (*self.inner_machine_state).borrow_mut();
         local_app_state_deref.bus.borrow_mut().write(address, data);
     }
 }
 
 impl<'a> Clone for State<'a> {
     fn clone(&self) -> Self {
+        let cpu_ref = (*self.cpu).borrow();
         State {
-            program: self.program.clone(),
-            cpu: self.cpu.clone(),
+            dis: self.dis.clone(),
+            cpu: Rc::new(RefCell::new((*cpu_ref).clone())),
             bus: self.bus.deref().borrow().clone_state(),
         }
     }

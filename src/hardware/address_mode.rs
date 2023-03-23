@@ -138,7 +138,7 @@ impl AddressMode {
                 false
             },
             AddressMode::Izy => {
-                let t = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
+                let t = cpu_ref.read(cpu_ref.registers.pc) as u16;
                 cpu_ref.registers.pc += 1;
                 
                 let lo = cpu_ref.read(t & 0x00FF) as u16;
@@ -152,9 +152,10 @@ impl AddressMode {
                 }
             },
             AddressMode::Rel => {
-                cpu_ref.address_mode.address_rel = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
+                cpu_ref.address_mode.address_rel = cpu_ref.read(cpu_ref.registers.pc) as u16;
                 cpu_ref.registers.pc += 1;
-                if cpu_ref.address_mode.address_rel & 0x80 != 0 {
+                
+                if cpu_ref.address_mode.address_rel & 0x0080 != 0 {
                     cpu_ref.address_mode.address_rel |= 0xFF00;
                 }
                 false
