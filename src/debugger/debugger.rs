@@ -374,15 +374,26 @@ impl<'a> State<'a> {
                             app_state_local_val.dis = disassembled_program;
                         }
                     },
-                    KeyCode::Tab => {
+                    KeyCode::Right | KeyCode::Tab => {
+                        
                         // add 3 to register A
                         let app_state_local_val = (*app.inner_machine_state).borrow_mut();
+                        
                         // deep copy the state
-                        app.previous_machine_state.push(app_state_local_val.clone());
+                        let previous_state = app_state_local_val.clone();
                         let mut cpu_local_val = (*app_state_local_val.cpu).borrow_mut();
-                        cpu_local_val.tick();
+
+                        let proceed = {
+                            let program_counter = cpu_local_val.registers.pc;
+                            app_state_local_val.dis.counters.contains_key(&(program_counter as i32))
+                        };
+                        
+                        if proceed {
+                            app.previous_machine_state.push(previous_state);
+                            cpu_local_val.tick();
+                        }
                     },
-                    KeyCode::Backspace => {
+                    KeyCode::Left | KeyCode::Backspace => {
                         if let Some(previous_state) = &app.previous_machine_state.pop() {
                             app.inner_machine_state = Rc::new(RefCell::new((*previous_state).clone()));
                             let cpu_ref_local = (*app.inner_machine_state).borrow_mut().cpu.clone();
@@ -390,7 +401,21 @@ impl<'a> State<'a> {
                             (*cpu_ref_local).borrow_mut().bus = Some(bus.clone());
                         }
                     },
-                    KeyCode::Esc => break,
+                    KeyCode::Insert | KeyCode::Char('i') => {
+                        if let Ok(program) = State::load_program_from_file(None)
+                        {
+                            for (i, byte) in program.iter().enumerate() {
+                                app.write((0x8000 + i as u16) as u16, *byte);
+                            }
+
+                            let disassembled_program = Disassembler::disassemble(&program);
+
+                            let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
+                            app_state_local_val.dis = disassembled_program;
+                        }
+                    }
+
+                    KeyCode::Esc | KeyCode::Char('q') => break,
                     _ => {}
                 }
             }
