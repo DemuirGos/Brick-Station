@@ -70,8 +70,8 @@ impl<'a> State<'a> {
 
         
 
-        (*bus).borrow_mut().write(0xFFFC, 0x00);
-        (*bus).borrow_mut().write(0xFFFC + 1, 0x80);
+        (*bus).borrow_mut().write(0x1FFC, 0x00);
+        (*bus).borrow_mut().write(0x1FFD, 0x01);
         (*cpu).borrow_mut().reset();
 
 
@@ -178,22 +178,22 @@ impl<'a> State<'a> {
         
         let upper_bound = if app.memory_page_index < 16 {
             16
-        } else if app.memory_page_index > 256 - 16 {
-            255
+        } else if app.memory_page_index > 0x1F - 16 {
+            0x1F
         } else {
             app.memory_page_index + 8
         };
 
         let lower_bound = if app.memory_page_index < 16 {
             0
-        } else if app.memory_page_index > 256 - 16 {
-            255 - 16
+        } else if app.memory_page_index > 0x1F - 16 {
+            0x1F - 16
         } else {
             app.memory_page_index - 7
         };
         
         let mut rows_vec = Vec::new();
-        rows_vec.push(Row::new([Cell::from("[ Pages ]")]));
+        rows_vec.push(Row::new([Cell::from("[ Pages]")]));
         (lower_bound..upper_bound)
             .map(|i| format!("[{}{:02X}]", if i == app.memory_page_index { ">>" } else { "" } ,i))
             .map(|s| Span::styled(s, Style::default().fg(Color::LightBlue)))
@@ -352,20 +352,20 @@ impl<'a> State<'a> {
             if let Ok(Event::Key(key)) = read() {
                 match key.code {
                     KeyCode::PageUp => {
-                        app.memory_page_index = (app.memory_page_index + 1) % 0xFF;
+                        app.memory_page_index = (app.memory_page_index + 1) % 0x1F;
                     },
                     KeyCode::PageDown => {
                         if app.memory_page_index == 0 {
-                            app.memory_page_index = 0xFF -1;
+                            app.memory_page_index = 0x1F -1;
                         } else {
-                            app.memory_page_index = (app.memory_page_index - 1) % 0xFF;
+                            app.memory_page_index = (app.memory_page_index - 1) % 0x1F;
                         }
                     },
                     KeyCode::Enter => {
                         if let Ok(program) = State::load_program_from_file(Some(program_path.clone()))
                         {
                             for (i, byte) in program.iter().enumerate() {
-                                app.write((0x8000 + i as u16) as u16, *byte);
+                                app.write((0x0100 + i as u16) as u16, *byte);
                             }
 
                             let disassembled_program = Disassembler::disassemble(&program);

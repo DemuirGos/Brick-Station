@@ -17,7 +17,7 @@ impl Disassembler {
     }
 
     pub fn disassemble(program: &Vec<u8>) -> Disassembler {
-        let memory_region_start : i32 = 0x8000;
+        let memory_region_start : i32 = 0x100;
         let mut string_builder = Vec::new();
         let mut wires_builder = HashMap::new();
         let instruction_set = Cpu::setup_instruction_map();

@@ -7,3 +7,6 @@ pub mod registers;
 pub mod bus;
 pub mod device;
 pub mod opcodes;
+pub mod ppu;
+pub mod cartridge;
+pub mod mapper;

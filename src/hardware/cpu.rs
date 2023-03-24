@@ -41,10 +41,11 @@ impl<'a> Cpu<'a> {
         self.opcode = 0;
         self.registers.sp = 0xFD;
         self.registers.set_flag(Flag::U, true);
-        self.address_mode.address_abs = 0xFFFC;
+        self.address_mode.address_abs = 0x1FFC;
         let hi = self.read(self.address_mode.address_abs + 1) as u16;
         let lo =  self.read(self.address_mode.address_abs) as u16;
         self.registers.pc = (hi << 8) + lo;
+        dbg!(self.registers.pc);
     }
 
     pub fn interrupt(&mut self, is_non_maskable: bool) -> () {
