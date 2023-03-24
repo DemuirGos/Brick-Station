@@ -17,7 +17,7 @@ impl Disassembler {
     }
 
     pub fn disassemble(program: &Vec<u8>) -> Disassembler {
-        let memory_region_start : i32 = 0x8000;
+        let memory_region_start : i32 = 0x100;
         let mut string_builder = Vec::new();
         let mut wires_builder = HashMap::new();
         let instruction_set = Cpu::setup_instruction_map();
@@ -36,47 +36,23 @@ impl Disassembler {
                         instruction_string.push_str(format!("${:02X}{:02X}", program[1], program[2]).as_str());
                         i += 2;
                     },
-                    AddressMode::Abx => {
-                        instruction_string.push_str(format!("${:02X}{:02X}, X", program[1], program[2]).as_str());
-                        i += 2;
-                    },
-                    AddressMode::Aby => {
-                        instruction_string.push_str(format!("${:02X}{:02X}, Y", program[1], program[2]).as_str());
-                        i += 2;
-                    },
                     AddressMode::Imm => {
                         instruction_string.push_str(format!("#${:02X}", program[1]).as_str());
                         i += 1;
                     },
-                    AddressMode::Imp => {
+                    AddressMode::EFF => {
                         instruction_string.push_str("");
                     },
                     AddressMode::Ind => {
                         instruction_string.push_str(format!("(${:02X}{:02X})", program[1], program[2]).as_str());
                         i += 2;
                     },
-                    AddressMode::Izx => {
-                        instruction_string.push_str(format!("(${:02X}, X)", program[1]).as_str());
-                        i += 1;
-                    },
-                    AddressMode::Izy => {
-                        instruction_string.push_str(format!("(${:02X}), Y", program[1]).as_str());
-                        i += 1;
-                    },
                     AddressMode::Rel => {
                         instruction_string.push_str(format!("${:02X}", program[1]).as_str());
                         i += 1;
                     },
-                    AddressMode::Zp0 => {
+                    AddressMode::Zpr => {
                         instruction_string.push_str(format!("${:02X}", program[1]).as_str());
-                        i += 1;
-                    },
-                    AddressMode::Zpx => {
-                        instruction_string.push_str(format!("${:02X}, X", program[1]).as_str());
-                        i += 1;
-                    },
-                    AddressMode::Zpy => {
-                        instruction_string.push_str(format!("${:02X}, Y", program[1]).as_str());
                         i += 1;
                     },
                 }

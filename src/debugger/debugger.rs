@@ -227,14 +227,17 @@ impl<'a> State<'a> {
         
         let build_registers_list = |cpu: &Rc<RefCell<Cpu>>| {
             let cpu_local = cpu.borrow_mut();
-            let list_elements = vec![
-                ListItem::new(Spans::from(vec![Span::raw(format!(" A: {:02X}", cpu_local.registers.a))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!(" X: {:02X}", cpu_local.registers.x))])), 
-                ListItem::new(Spans::from(vec![Span::raw(format!(" Y: {:02X}", cpu_local.registers.y))])), 
+            let mut list_elements = vec![
                 ListItem::new(Spans::from(vec![Span::raw(format!("PC: {:04X}", cpu_local.registers.pc))])), 
                 ListItem::new(Spans::from(vec![Span::raw(format!("SP: {:02X}", cpu_local.registers.sp))])), 
                 ListItem::new(Spans::from(vec![Span::raw(format!(" P: {:02X}", cpu_local.registers.status))])), 
             ];
+
+            cpu_local.registers.banks.iter()
+                .enumerate()
+                .map(|(i, b)| ListItem::new(Spans::from(vec![Span::raw(format!("B{:02X}: {:02X}", i, b))])))
+                .for_each(|l| list_elements.push(l));
+            
             let list = List::new(list_elements)
                 .block(Block::default().borders(Borders::ALL).title("Registers"))
                 .highlight_style(Style::default().add_modifier(Modifier::REVERSED))

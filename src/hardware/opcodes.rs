@@ -3,79 +3,61 @@ use std::{fmt::Display};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Opcode {
-    BRK, ORA, ASL, PHP, BPL, 
-    CLC, JSR, AND, BIT, ROL, 
-    PLP, BMI, SEC, RTI, EOR, 
-    LSR, PHA, JMP, BVC, CLI, 
-    RTS, ADC, ROR, PLA, BVS, 
-    SEI, STA, STY, STX, DEY, 
-    TXA, BCC, TYA, TXS, LDY, 
-    LDA, LDX, TAY, TAX, BCS, 
-    CLV, TSX, CPY, CMP, DEC, 
-    INY, DEX, BNE, CLD, NOP, 
-    CPX, SBC, INC, INX, BEQ, 
-    SED, 
+    ADC, // Add register $0 with $1 and store result in $0 with carry  
+    SBC, // Subtract register $0 with $1 and store result in $0 with carry 
+    AND, // AND register $0 with $1 and store result in $0 
+    OR, // OR register $0 with $1 and store result in $0 
+    SL, // Arithmetic shift left
+    SR, // Arithmetic shift right 
+    ROL, // Rotate left 
+    ROR, // Rotate right 
+    BRC, // Branch on register clear
+    BRS, // Branch on register set
+    CMP, // Compare with Register $0 with register $1
+    DEC, // Decrement register $0
+    INC, // Increment register $0
+    EOR, // Exclusive OR register $0 with register $1 and store result in $0
+    JMP, // Jump to address 
+    LDR, // Load register local with value $1
+    NOP, // No operation
+    MOV, // Move register $0 to register $1
+    PLR, // Pull register from stack
+    PHR, // Push register to stack
+    STR, // Store register in memory
+    BRK, // Break
+    JSR, // Jump to subroutine
+    RTS, // Return from subroutine
+    RTI, // Return from interrupt    
 }
 
 impl Opcode {
     pub fn from_str(word: &str) -> Opcode {
         match word {
-            "BRK" => Opcode::BRK,
-            "ORA" => Opcode::ORA,
-            "ASL" => Opcode::ASL,
-            "PHP" => Opcode::PHP,
-            "BPL" => Opcode::BPL,
-            "CLC" => Opcode::CLC,
-            "JSR" => Opcode::JSR,
-            "AND" => Opcode::AND,
-            "BIT" => Opcode::BIT,
-            "ROL" => Opcode::ROL,
-            "PLP" => Opcode::PLP,
-            "BMI" => Opcode::BMI,
-            "SEC" => Opcode::SEC,
-            "RTI" => Opcode::RTI,
-            "EOR" => Opcode::EOR,
-            "LSR" => Opcode::LSR,
-            "PHA" => Opcode::PHA,
-            "JMP" => Opcode::JMP,
-            "BVC" => Opcode::BVC,
-            "CLI" => Opcode::CLI,
-            "RTS" => Opcode::RTS,
             "ADC" => Opcode::ADC,
+            "SBC" => Opcode::SBC,
+            "AND" => Opcode::AND,
+            "OR" => Opcode::OR,
+            "SL" => Opcode::SL,
+            "SR" => Opcode::SR,
+            "ROL" => Opcode::ROL,
             "ROR" => Opcode::ROR,
-            "PLA" => Opcode::PLA,
-            "BVS" => Opcode::BVS,
-            "SEI" => Opcode::SEI,
-            "STA" => Opcode::STA,
-            "STY" => Opcode::STY,
-            "STX" => Opcode::STX,
-            "DEY" => Opcode::DEY,
-            "TXA" => Opcode::TXA,   
-            "BCC" => Opcode::BCC,
-            "TYA" => Opcode::TYA,
-            "TXS" => Opcode::TXS,
-            "LDY" => Opcode::LDY,
-            "LDA" => Opcode::LDA,
-            "LDX" => Opcode::LDX,
-            "TAY" => Opcode::TAY,
-            "TAX" => Opcode::TAX,
-            "BCS" => Opcode::BCS,
-            "CLV" => Opcode::CLV,
-            "TSX" => Opcode::TSX,
-            "CPY" => Opcode::CPY,
+            "BRC" => Opcode::BRC,
+            "BRS" => Opcode::BRS,
             "CMP" => Opcode::CMP,
             "DEC" => Opcode::DEC,
-            "INY" => Opcode::INY,
-            "DEX" => Opcode::DEX,
-            "BNE" => Opcode::BNE,
-            "CLD" => Opcode::CLD,
-            "NOP" => Opcode::NOP,
-            "CPX" => Opcode::CPX,
-            "SBC" => Opcode::SBC,
             "INC" => Opcode::INC,
-            "INX" => Opcode::INX,
-            "BEQ" => Opcode::BEQ,
-            "SED" => Opcode::SED,
+            "EOR" => Opcode::EOR,
+            "JMP" => Opcode::JMP,
+            "LDR" => Opcode::LDR,
+            "NOP" => Opcode::NOP,
+            "MOV" => Opcode::MOV,
+            "PLR" => Opcode::PLR,
+            "PHR" => Opcode::PHR,
+            "STR" => Opcode::STR,
+            "BRK" => Opcode::BRK,
+            "JSR" => Opcode::JSR,
+            "RTS" => Opcode::RTS,
+            "RTI" => Opcode::RTI,
             _ => panic!("Invalid opcode: {}", word),
         }
     }
@@ -84,62 +66,7 @@ impl Opcode {
 impl Display for Opcode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Opcode::BRK => write!(f, "BRK"),
-            Opcode::ORA => write!(f, "ORA"),
-            Opcode::ASL => write!(f, "ASL"),
-            Opcode::PHP => write!(f, "PHP"),
-            Opcode::BPL => write!(f, "BPL"),
-            Opcode::CLC => write!(f, "CLC"),
-            Opcode::JSR => write!(f, "JSR"),
-            Opcode::AND => write!(f, "AND"),
-            Opcode::BIT => write!(f, "BIT"),
-            Opcode::ROL => write!(f, "ROL"),
-            Opcode::PLP => write!(f, "PLP"),
-            Opcode::BMI => write!(f, "BMI"),
-            Opcode::SEC => write!(f, "SEC"),
-            Opcode::RTI => write!(f, "RTI"),
-            Opcode::EOR => write!(f, "EOR"),
-            Opcode::LSR => write!(f, "LSR"),
-            Opcode::PHA => write!(f, "PHA"),
-            Opcode::JMP => write!(f, "JMP"),
-            Opcode::BVC => write!(f, "BVC"),
-            Opcode::CLI => write!(f, "CLI"),
-            Opcode::RTS => write!(f, "RTS"),
-            Opcode::ADC => write!(f, "ADC"),
-            Opcode::ROR => write!(f, "ROR"),
-            Opcode::PLA => write!(f, "PLA"),
-            Opcode::BVS => write!(f, "BVS"),
-            Opcode::SEI => write!(f, "SEI"),
-            Opcode::STA => write!(f, "STA"),
-            Opcode::STY => write!(f, "STY"),
-            Opcode::STX => write!(f, "STX"),
-            Opcode::DEY => write!(f, "DEY"),
-            Opcode::TXA => write!(f, "TXA"),
-            Opcode::BCC => write!(f, "BCC"),
-            Opcode::TYA => write!(f, "TYA"),
-            Opcode::TXS => write!(f, "TXS"),
-            Opcode::LDY => write!(f, "LDY"),
-            Opcode::LDA => write!(f, "LDA"),
-            Opcode::LDX => write!(f, "LDX"),
-            Opcode::TAY => write!(f, "TAY"),
-            Opcode::TAX => write!(f, "TAX"),
-            Opcode::BCS => write!(f, "BCS"),
-            Opcode::CLV => write!(f, "CLV"),
-            Opcode::TSX => write!(f, "TSX"),
-            Opcode::CPY => write!(f, "CPY"),    
-            Opcode::CMP => write!(f, "CMP"),
-            Opcode::DEC => write!(f, "DEC"),
-            Opcode::INY => write!(f, "INY"),
-            Opcode::DEX => write!(f, "DEX"),
-            Opcode::BNE => write!(f, "BNE"),
-            Opcode::CLD => write!(f, "CLD"),
-            Opcode::NOP => write!(f, "NOP"),
-            Opcode::CPX => write!(f, "CPX"),
-            Opcode::SBC => write!(f, "SBC"),
-            Opcode::INC => write!(f, "INC"),
-            Opcode::INX => write!(f, "INX"),
-            Opcode::BEQ => write!(f, "BEQ"),
-            Opcode::SED => write!(f, "SED"),
+            _ => write!(f, "{:?}", self)
         }
     }
 }

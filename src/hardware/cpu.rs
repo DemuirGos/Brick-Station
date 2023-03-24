@@ -72,11 +72,9 @@ impl<'a> Cpu<'a> {
     pub fn fetch(&mut self) -> u8 {
         let opcode_metadata = self.instruction_set.get(&self.opcode);
         if let Some(metadata) = opcode_metadata {
-            if metadata.address_mode != AddressMode::Imp {
-                self.registers.fetched = self.read(self.address_mode.address_abs);
-            }
+            self.registers.local = self.read(self.address_mode.address_abs);
         }
-        self.registers.fetched
+        self.registers.local
     }
     
     pub fn connect_bus(&'a mut self, bus: Rc<RefCell<Bus<'a>>>)  {
@@ -91,25 +89,25 @@ impl<'a> Cpu<'a> {
         let reader = BufReader::new(metadata_file);
     
         let mut instructions_set = HashMap::new();
-        reader.split(b'\n').for_each(|line| {
-            let line = line.unwrap();
-            let tokens = line.split(|&c| c == b',')
-                .map(std::str::from_utf8)
-                .map(|s| s.unwrap().trim())
-                .collect::<Vec<&str>>();
-            let instruction = Instructions::new(
-                Opcode::from_str(tokens[1]),
-                tokens[0].parse::<u8>().unwrap(),
-                tokens[3].parse::<u8>().unwrap(),
-                AddressMode::from_str(tokens[2])
-            );
-            instructions_set.insert(instruction.opcode, instruction);
-        });
+        // reader.split(b'\n').for_each(|line| {
+        //     let line = line.unwrap();
+        //     let tokens = line.split(|&c| c == b',')
+        //         .map(std::str::from_utf8)
+        //         .map(|s| s.unwrap().trim())
+        //         .collect::<Vec<&str>>();
+        //     let instruction = Instructions::new(
+        //         Opcode::from_str(tokens[1]),
+        //         tokens[0].parse::<u8>().unwrap(),
+        //         tokens[3].parse::<u8>().unwrap(),
+        //         AddressMode::from_str(tokens[2])
+        //     );
+        //     instructions_set.insert(instruction.opcode, instruction);
+        // });
 
         // foreach index in 0..255 not in instruction_set add a default instruction
         for i in 0..255 {
             if !instructions_set.contains_key(&i) {
-                instructions_set.insert(i, Instructions::new(Opcode::NOP, i, 1, AddressMode::Imp));
+                instructions_set.insert(i, Instructions::new(Opcode::NOP, i, 1, AddressMode::EFF));
             }
         }
 
