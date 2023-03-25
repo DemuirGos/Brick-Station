@@ -1,4 +1,4 @@
-use super::{interfaces::{DeviceOps}, ram::Ram, cpu::Cpu, ppu::Ppu, cartridge::Cartridge};
+use super::{interfaces::{DeviceOps, Originator}, ram::Ram, cpu::Cpu, ppu::Ppu, cartridge::Cartridge};
 
 #[derive(Clone)]
 pub enum Device<'a> {
@@ -18,21 +18,21 @@ impl<'a> DeviceOps for Device<'a> {
         }
     }
 
-    fn read(&self, addr: u16) -> u8 {
+    fn read(&self, addr: u16, reader: Originator) -> u8 {
         match self {
-            Device::Ram(ram) => ram.read(addr),
-            Device::Cpu(cpu) => cpu.read(addr),
-            Device::Ppu(ppu) => ppu.read(addr),
-            Device::Cartridge(cartridge) => cartridge.read(addr)
+            Device::Ram(ram) => ram.read(addr, reader),
+            Device::Cpu(cpu) => cpu.read(addr, reader),
+            Device::Ppu(ppu) => ppu.read(addr, reader),
+            Device::Cartridge(cartridge) => cartridge.read(addr, reader)
         }
     }
 
-    fn write(&mut self, addr: u16, value: u8) -> () {
+    fn write(&mut self, addr: u16, value: u8, reader: Originator) -> () {
         match self {
-            Device::Ram(ram) => ram.write(addr, value),
-            Device::Cpu(cpu) => cpu.write(addr, value),
-            Device::Ppu(ppu) => ppu.write(addr, value),
-            Device::Cartridge(cartridge) => cartridge.write(addr, value)
+            Device::Ram(ram) => ram.write(addr, value, reader),
+            Device::Cpu(cpu) => cpu.write(addr, value, reader),
+            Device::Ppu(ppu) => ppu.write(addr, value, reader),
+            Device::Cartridge(cartridge) => cartridge.write(addr, value, reader)
         }
     }
 }

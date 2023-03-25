@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use super::{interfaces::{DeviceOps}, device::Device};
+use super::{interfaces::{DeviceOps, Originator}, device::Device};
 
 pub struct Bus<'a> {
     pub devices : Vec<Rc<RefCell<Device<'a>>>>
@@ -43,16 +43,16 @@ impl<'a> Bus<'a> {
 }
 
 impl DeviceOps for Bus<'_> {
-    fn read(&self, addr: u16) -> u8 {
+    fn read(&self, addr: u16, reader:Originator) -> u8 {
         self.devices.iter()
             .filter(|device| device.borrow().within_range(addr))
-            .map(|device| device.borrow().read(addr))
+            .map(|device| device.borrow().read(addr, reader))
             .nth(0).unwrap()
     }
 
-    fn write(&mut self, addr: u16, value: u8) -> () {
+    fn write(&mut self, addr: u16, value: u8, reader:Originator) -> () {
         self.devices.iter_mut()
             .filter(|device| device.borrow().within_range(addr))
-            .for_each(|device| device.borrow_mut().write(addr, value));
+            .for_each(|device| device.borrow_mut().write(addr, value, reader));
     }
 }

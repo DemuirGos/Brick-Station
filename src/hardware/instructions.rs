@@ -1,4 +1,4 @@
-use super::{address_mode::AddressMode, cpu::Cpu, opcodes::Opcode, registers::Flag, interfaces::DeviceOps};
+use super::{address_mode::AddressMode, cpu::Cpu, opcodes::Opcode, registers::Flag, interfaces::{DeviceOps, Originator}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instructions {
@@ -96,7 +96,7 @@ impl Instructions {
                 if self.address_mode == AddressMode::Imp {
                     cpu_ref.registers.a = result as u8;
                 } else {
-                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8)
+                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8, Originator::Cpu)
                 }
 
                 false
@@ -110,7 +110,7 @@ impl Instructions {
                 if self.address_mode == AddressMode::Imp {
                     cpu_ref.registers.a = result as u8;
                 } else {
-                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8)
+                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8, Originator::Cpu)
                 }
 
                 false
@@ -125,7 +125,7 @@ impl Instructions {
                 if self.address_mode == AddressMode::Imp {
                     cpu_ref.registers.a = result as u8;
                 } else {
-                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8)
+                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8, Originator::Cpu)
                 }
 
                 false
@@ -140,7 +140,7 @@ impl Instructions {
                 if self.address_mode == AddressMode::Imp {
                     cpu_ref.registers.a = result as u8;
                 } else {
-                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8)
+                    cpu_ref.write(cpu_ref.address_mode.address_abs, result as u8, Originator::Cpu)
                 }
 
                 false
@@ -245,7 +245,7 @@ impl Instructions {
             Opcode::DEC => {
                 cpu_ref.fetch();
                 let value = cpu_ref.registers.fetched - 1;
-                cpu_ref.write(cpu_ref.address_mode.address_abs, value as u8);
+                cpu_ref.write(cpu_ref.address_mode.address_abs, value as u8, Originator::Cpu);
                 cpu_ref.registers.set_flag(Flag::Z, value == 0);
                 cpu_ref.registers.set_flag(Flag::N, value & 0x0080 != 0);
                 false
@@ -253,7 +253,7 @@ impl Instructions {
             Opcode::INC => {
                 cpu_ref.fetch();
                 let value = cpu_ref.registers.fetched + 1;
-                cpu_ref.write(cpu_ref.address_mode.address_abs, value as u8);
+                cpu_ref.write(cpu_ref.address_mode.address_abs, value as u8, Originator::Cpu);
                 cpu_ref.registers.set_flag(Flag::Z, value == 0);
                 cpu_ref.registers.set_flag(Flag::N, value & 0x0080 != 0);
                 false
@@ -333,15 +333,15 @@ impl Instructions {
                 false
             },
             Opcode::STA => {
-                cpu_ref.write(cpu_ref.address_mode.address_abs, cpu_ref.registers.a);
+                cpu_ref.write(cpu_ref.address_mode.address_abs, cpu_ref.registers.a, Originator::Cpu);
                 false
             },
             Opcode::STX => {
-                cpu_ref.write(cpu_ref.address_mode.address_abs, cpu_ref.registers.x);
+                cpu_ref.write(cpu_ref.address_mode.address_abs, cpu_ref.registers.x, Originator::Cpu);
                 false
             },
             Opcode::STY => {
-                cpu_ref.write(cpu_ref.address_mode.address_abs, cpu_ref.registers.y);
+                cpu_ref.write(cpu_ref.address_mode.address_abs, cpu_ref.registers.y, Originator::Cpu);
                 false
             },
             Opcode::TAX => {
@@ -379,13 +379,13 @@ impl Instructions {
                 false
             },
             Opcode::PHA => {
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16, cpu_ref.registers.a);
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16, cpu_ref.registers.a, Originator::Cpu);
                 cpu_ref.registers.sp -= 1;
                 false
             },
             Opcode::PLA => {
                 cpu_ref.registers.sp += 1;
-                cpu_ref.registers.a =cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16);
+                cpu_ref.registers.a =cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16, Originator::Cpu);
                 cpu_ref.registers.set_flag(Flag::Z, cpu_ref.registers.a == 0);
                 cpu_ref.registers.set_flag(Flag::N, cpu_ref.registers.a & 0x0080 != 0);
                 false
@@ -393,7 +393,7 @@ impl Instructions {
             Opcode::PHP => {
                 cpu_ref.registers.set_flag(Flag::B, true);
                 cpu_ref.registers.set_flag(Flag::U, true);
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16, cpu_ref.registers.status);
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16, cpu_ref.registers.status, Originator::Cpu);
                 cpu_ref.registers.set_flag(Flag::B, false);
                 cpu_ref.registers.set_flag(Flag::U, false);
                 cpu_ref.registers.sp -= 1;
@@ -401,7 +401,7 @@ impl Instructions {
             },
             Opcode::PLP => {
                 cpu_ref.registers.sp += 1;
-                cpu_ref.registers.status = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16);
+                cpu_ref.registers.status = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16, Originator::Cpu);
                 cpu_ref.registers.set_flag(Flag::U, false);
                 false
             },
@@ -409,17 +409,17 @@ impl Instructions {
                 cpu_ref.registers.pc += 1;
                 cpu_ref.registers.set_flag(Flag::I, true);
                 
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, (cpu_ref.registers.pc >> 8) as u8);
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 1, cpu_ref.registers.pc as u8);
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, (cpu_ref.registers.pc >> 8) as u8, Originator::Cpu);
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 1, cpu_ref.registers.pc as u8, Originator::Cpu);
                 cpu_ref.registers.sp -= 2;
 
                 cpu_ref.registers.set_flag(Flag::B, true);
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16, cpu_ref.registers.status as u8);
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16, cpu_ref.registers.status as u8, Originator::Cpu);
                 cpu_ref.registers.sp -= 1;
                 cpu_ref.registers.set_flag(Flag::B, false);
 
-                let lo = cpu_ref.read(0xFFFE) as u16;
-                let hi = cpu_ref.read(0xFFFF) as u16;
+                let lo = cpu_ref.read(0xFFFE, Originator::Cpu) as u16;
+                let hi = cpu_ref.read(0xFFFF, Originator::Cpu) as u16;
                 cpu_ref.registers.pc += (hi << 8) | lo;
 
                 false
@@ -427,8 +427,8 @@ impl Instructions {
             Opcode::JSR => {
                 cpu_ref.registers.pc -= 1;
 
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, (cpu_ref.registers.pc >> 8) as u8);    
-                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 1, (cpu_ref.registers.pc) as u8);    
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 0, (cpu_ref.registers.pc >> 8) as u8, Originator::Cpu);    
+                cpu_ref.write(0x0100 + cpu_ref.registers.sp as u16 - 1, (cpu_ref.registers.pc) as u8, Originator::Cpu);    
                 cpu_ref.registers.sp -= 2;
 
                 cpu_ref.registers.pc = cpu_ref.address_mode.address_abs;
@@ -436,25 +436,25 @@ impl Instructions {
             },
             Opcode::RTS => {
                 cpu_ref.registers.sp += 1;
-                let lo = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16) as u16;    
+                let lo = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16, Originator::Cpu) as u16;    
 
                 cpu_ref.registers.sp += 1;
-                let hi = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16) as u16;    
+                let hi = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16, Originator::Cpu) as u16;    
 
                 cpu_ref.registers.pc = (hi << 8) | lo; 
                 false
             },
             Opcode::RTI => {
                 cpu_ref.registers.sp += 1;
-                cpu_ref.registers.status = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16);
+                cpu_ref.registers.status = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16, Originator::Cpu);
                 cpu_ref.registers.set_flag(Flag::B, false);
                 cpu_ref.registers.set_flag(Flag::U, false);
 
                 cpu_ref.registers.sp += 1;
-                let lo = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16) as u16;    
+                let lo = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16, Originator::Cpu) as u16;    
 
                 cpu_ref.registers.sp += 1;
-                let hi = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16) as u16;    
+                let hi = cpu_ref.read(0x0100 + cpu_ref.registers.sp as u16, Originator::Cpu) as u16;    
 
                 cpu_ref.registers.pc = (hi << 8) | lo; 
                 false

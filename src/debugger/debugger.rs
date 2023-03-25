@@ -1,7 +1,10 @@
+use crate::hardware::cartridge;
 use crate::hardware::device::Device;
 use crate::hardware::interfaces::DeviceOps;
 use crate::hardware::bus::*;
 use crate::hardware::cpu::*;
+use crate::hardware::interfaces::Originator;
+use crate::hardware::nes::State;
 use crate::hardware::ram::*;
 
 use std::cell::RefCell;
@@ -29,53 +32,22 @@ use crossterm::{
 
 use super::disassembler::Disassembler;
 
-pub struct State<'a> {
-    pub bus: Rc<RefCell<Bus<'a>>>,
-    pub cpu: Rc<RefCell<Cpu<'a>>>,
-    pub dis: Disassembler
-}
-
 pub struct App<'a> {
+    pub dis: Disassembler,
     pub memory_page_index: i32,
     pub previous_machine_state: Vec<State<'a>>,
     pub inner_machine_state: Rc<RefCell<State<'a>>>,
 }
 
-impl<'a> State<'a> {
+impl<'a> App<'a> {
     pub fn build_view<B: Backend>(f: &mut Frame<B>, app: &App)  {
         let size = Rect::new(0, 0, f.size().width, f.size().height);
         let block = Block::default().style(Style::default().bg(Color::White).fg(Color::Black));
         f.render_widget(block, size);
 
-        State::memory_viewer(f, app);
-        State::program_viewer(f, app);
-        State::processor_viewer(f, app);
-    }
-
-    pub fn initiate_state() -> Rc<RefCell<State<'a>>> {
-        let ram = Rc::new(RefCell::new(Device::Ram(Ram::new())));
-        let bus = Rc::new(RefCell::new(Bus::new()));
-        let cpu = Rc::new(RefCell::new(Cpu::new()));
-        
-        bus.borrow_mut().add_device(ram.clone());
-
-        (*cpu).borrow_mut().bus = Some(bus.clone());
-
-
-        let state = Rc::new(RefCell::new(State {
-            bus : Rc::clone(&bus),
-            cpu : Rc::clone(&cpu),
-            dis : Disassembler::new()
-        }));
-
-        
-
-        (*bus).borrow_mut().write(0x1FFC, 0x00);
-        (*bus).borrow_mut().write(0x1FFD, 0x01);
-        (*cpu).borrow_mut().reset();
-
-
-        state
+        App::memory_viewer(f, app);
+        App::program_viewer(f, app);
+        App::processor_viewer(f, app);
     }
 
     pub fn load_program_from_file(possible_path : Option<String>) -> Result<Vec<u8>, Error> {
@@ -150,7 +122,7 @@ impl<'a> State<'a> {
                 ];
                 for j in 0..16 {
                     let address = (page << 8) + (i * 16 + j);
-                    let value = bus.borrow_mut().read(address);
+                    let value = bus.borrow_mut().read(address, Originator::Cpu);
                     let cell = Cell::from(format!("{:04X}", value)).style(Style::default().fg(Color::Black));
                     row_data.push(cell);
                 }
@@ -323,8 +295,7 @@ impl<'a> State<'a> {
         };
 
         let local_app_state_deref = (*app.inner_machine_state).borrow_mut();
-        let program = local_app_state_deref.dis.clone();
-        let list = build_program_list((local_app_state_deref.cpu.borrow().registers.pc) as i32, program);
+        let list = build_program_list((local_app_state_deref.cpu.borrow().registers.pc) as i32, app.dis.clone());
         f.render_widget(list, chunks[1]);
     }
 
@@ -339,15 +310,16 @@ impl<'a> State<'a> {
 
         let mut app = App {
             memory_page_index: 0,
-            inner_machine_state: State::initiate_state(),
+            inner_machine_state: Rc::new(RefCell::new(State::new())),
             previous_machine_state: Vec::new(),
+            dis: Disassembler::new(),
         };
 
         terminal.clear()?;
         terminal.hide_cursor()?;
         
         loop {
-            terminal.draw(|f| State::build_view(f, &app))?;
+            terminal.draw(|f| App::build_view(f, &app))?;
 
             if let Ok(Event::Key(key)) = read() {
                 match key.code {
@@ -362,16 +334,14 @@ impl<'a> State<'a> {
                         }
                     },
                     KeyCode::Enter => {
-                        if let Ok(program) = State::load_program_from_file(Some(program_path.clone()))
+                        if let Ok(program) = App::load_program_from_file(Some(program_path.clone()))
                         {
                             for (i, byte) in program.iter().enumerate() {
-                                app.write((0x0100 + i as u16) as u16, *byte);
+                                app.write((0x0100 + i as u16) as u16, *byte, Originator::Cpu);
                             }
 
                             let disassembled_program = Disassembler::disassemble(&program);
-
-                            let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
-                            app_state_local_val.dis = disassembled_program;
+                            app.dis = disassembled_program;
                         }
                     },
                     KeyCode::Right | KeyCode::Tab => {
@@ -385,7 +355,7 @@ impl<'a> State<'a> {
 
                         let proceed = {
                             let program_counter = cpu_local_val.registers.pc;
-                            app_state_local_val.dis.counters.contains_key(&(program_counter as i32))
+                            app.dis.counters.contains_key(&(program_counter as i32))
                         };
                         
                         if proceed {
@@ -396,22 +366,18 @@ impl<'a> State<'a> {
                     KeyCode::Left | KeyCode::Backspace => {
                         if let Some(previous_state) = &app.previous_machine_state.pop() {
                             app.inner_machine_state = Rc::new(RefCell::new((*previous_state).clone()));
-                            let cpu_ref_local = (*app.inner_machine_state).borrow_mut().cpu.clone();
-                            let bus = (*app.inner_machine_state).borrow_mut().bus.clone();
-                            (*cpu_ref_local).borrow_mut().bus = Some(bus.clone());
                         }
                     },
                     KeyCode::Insert | KeyCode::Char('i') => {
-                        if let Ok(program) = State::load_program_from_file(None)
+                        if let Ok(program) = App::load_program_from_file(None)
                         {
                             for (i, byte) in program.iter().enumerate() {
-                                app.write((0x8000 + i as u16) as u16, *byte);
+                                app.write((0x8000 + i as u16) as u16, *byte, Originator::Cpu);
                             }
 
                             let disassembled_program = Disassembler::disassemble(&program);
 
-                            let mut app_state_local_val = (*app.inner_machine_state).borrow_mut();
-                            app_state_local_val.dis = disassembled_program;
+                            app.dis = disassembled_program;
                         }
                     }
 
@@ -426,24 +392,13 @@ impl<'a> State<'a> {
 }
 
 impl DeviceOps for App<'_> {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: u16, reader:Originator) -> u8 {
         let local_app_state_deref = (*self.inner_machine_state).borrow_mut();
-        let x = local_app_state_deref.bus.borrow_mut().read(address); x
+        let x = local_app_state_deref.bus.borrow_mut().read(address, reader); x
     }
 
-    fn write(&mut self, address: u16, data: u8) {
+    fn write(&mut self, address: u16, data: u8, writer:Originator) {
         let local_app_state_deref = (*self.inner_machine_state).borrow_mut();
-        local_app_state_deref.bus.borrow_mut().write(address, data);
+        local_app_state_deref.bus.borrow_mut().write(address, data, writer);
     }
 }
-
-impl<'a> Clone for State<'a> {
-    fn clone(&self) -> Self {
-        let cpu_ref = (*self.cpu).borrow();
-        State {
-            dis: self.dis.clone(),
-            cpu: Rc::new(RefCell::new((*cpu_ref).clone())),
-            bus: self.bus.deref().borrow().clone_state(),
-        }
-    }
-} 

@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::Rc};
 
+use crate::hardware::interfaces::Originator;
+
 use super::{
     registers::{Registers, Flag}, 
     instructions::{Instructions}, 
@@ -42,28 +44,28 @@ impl<'a> Cpu<'a> {
         self.registers.sp = 0xFD;
         self.registers.set_flag(Flag::U, true);
         self.address_mode.address_abs = 0x1FFC;
-        let hi = self.read(self.address_mode.address_abs + 1) as u16;
-        let lo =  self.read(self.address_mode.address_abs) as u16;
+        let hi = self.read(self.address_mode.address_abs + 1, Originator::Cpu) as u16;
+        let lo =  self.read(self.address_mode.address_abs, Originator::Cpu) as u16;
         self.registers.pc = (hi << 8) + lo;
         dbg!(self.registers.pc);
     }
 
     pub fn interrupt(&mut self, is_non_maskable: bool) -> () {
         if !self.registers.get_flag(Flag::I) || is_non_maskable {
-            self.write(0x0100 + self.registers.sp as u16 + 0 , (self.registers.pc >> 8) as u8);
-            self.write(0x0100 + self.registers.sp as u16 - 1 , self.registers.pc  as u8);
+            self.write(0x0100 + self.registers.sp as u16 + 0 , (self.registers.pc >> 8) as u8, Originator::Cpu);
+            self.write(0x0100 + self.registers.sp as u16 - 1 , self.registers.pc  as u8, Originator::Cpu);
             self.registers.sp -= 2;
             
             self.registers.set_flag(Flag::B, false);
             self.registers.set_flag(Flag::U, true);
             self.registers.set_flag(Flag::I, true);
             
-            self.write(0x0100 + self.registers.sp as u16 , self.registers.status  as u8);
+            self.write(0x0100 + self.registers.sp as u16 , self.registers.status  as u8, Originator::Cpu);
             self.registers.sp -= 1;
 
             self.address_mode.address_abs = if is_non_maskable { 0xFFFA } else { 0xFFFE };
-            let lo = self.read(self.address_mode.address_abs + 0) as u16;
-            let hi = self.read(self.address_mode.address_abs + 1) as u16;
+            let lo = self.read(self.address_mode.address_abs + 0, Originator::Cpu) as u16;
+            let hi = self.read(self.address_mode.address_abs + 1, Originator::Cpu) as u16;
             self.registers.pc = (hi << 8) + lo;
 
             self.cycle = if is_non_maskable { 8 } else { 7 } ;
@@ -74,7 +76,7 @@ impl<'a> Cpu<'a> {
         let opcode_metadata = self.instruction_set.get(&self.opcode);
         if let Some(metadata) = opcode_metadata {
             if metadata.address_mode != AddressMode::Imp {
-                self.registers.fetched = self.read(self.address_mode.address_abs);
+                self.registers.fetched = self.read(self.address_mode.address_abs, Originator::Cpu);
             }
         }
         self.registers.fetched
@@ -119,7 +121,7 @@ impl<'a> Cpu<'a> {
 
     pub fn tick(&mut self) -> () {
         if self.cycle == 0 {
-            self.opcode = self.read(self.registers.pc as u16);
+            self.opcode = self.read(self.registers.pc as u16, Originator::Cpu);
             self.registers.pc += 1;
 
             let instruction_data = self.instruction_set.get(&self.opcode).unwrap().to_owned();
@@ -136,13 +138,13 @@ impl<'a> Cpu<'a> {
 }
 
 impl DeviceOps for Cpu<'_> {
-    fn read(&self, addr : u16 ) -> u8 {
+    fn read(&self, addr : u16 , _:Originator) -> u8 {
         self.bus.as_ref().unwrap().borrow_mut()
-            .read(addr)
+            .read(addr, Originator::Cpu)
     }
     
-    fn write(&mut self, addr : u16, data: u8) -> () {
+    fn write(&mut self, addr : u16, data: u8, _:Originator) -> () {
         self.bus.as_ref().unwrap().borrow_mut()
-            .write(addr, data)
+            .write(addr, data, Originator::Cpu)
     }
 }

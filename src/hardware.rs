@@ -10,3 +10,4 @@ pub mod opcodes;
 pub mod ppu;
 pub mod cartridge;
 pub mod mapper;
+pub mod nes;
