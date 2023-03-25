@@ -41,25 +41,57 @@ impl AddressMode {
     pub fn handle(&self, cpu_ref: &mut Cpu) -> bool {
         match self {
             AddressMode::Imm => {
+                cpu_ref.registers.pc += 1;
                 cpu_ref.address_mode.address_abs = cpu_ref.registers.pc as u16;
                 cpu_ref.registers.pc += 1;
                 false
             },
             AddressMode::Zpr => {
+                let extra = {
+                    let register_arg = cpu_ref.read(cpu_ref.registers.pc);
+                    if register_arg < 0x00FF { 
+                        cpu_ref.registers.banks[register_arg as usize] 
+                    } else { 
+                        0
+                    }
+                };
+                cpu_ref.registers.pc += 1;
                 cpu_ref.address_mode.address_abs = cpu_ref.read(cpu_ref.registers.pc as u16).into();
+                cpu_ref.address_mode.address_abs += extra as u16;
                 cpu_ref.registers.pc += 1;
                 cpu_ref.address_mode.address_abs &= 0x00FF;
                 false
             },
             AddressMode::Abs => {
+                let extra = {
+                    let register_arg = cpu_ref.read(cpu_ref.registers.pc);
+                    if register_arg < 0x00FF { 
+                        cpu_ref.registers.banks[register_arg as usize] 
+                    } else { 
+                        0
+                    }
+                };
+
+                cpu_ref.registers.pc += 1;
                 let lo = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
                 cpu_ref.registers.pc += 1;
                 let hi = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
                 cpu_ref.registers.pc += 1;
+                
                 cpu_ref.address_mode.address_abs = (hi << 8) | lo;
+                cpu_ref.address_mode.address_abs += extra as u16;
                 false
             },
             AddressMode::Ind => {
+                let extra :u16 = {
+                    let register_arg = cpu_ref.read(cpu_ref.registers.pc);
+                    if register_arg < 0x00FF { 
+                        cpu_ref.registers.banks[register_arg as usize] as u16
+                    } else { 
+                        0
+                    }
+                };
+                cpu_ref.registers.pc += 1;
                 let lo = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
                 cpu_ref.registers.pc += 1;
                 let hi = cpu_ref.read(cpu_ref.registers.pc as u16) as u16;
@@ -67,10 +99,11 @@ impl AddressMode {
 
                 let ptr = (hi << 8) | lo;
                 let hi_ptr = if lo == 0x00ff { ptr & 0xff00 } else { ptr + 1 };
-                cpu_ref.address_mode.address_abs = ((cpu_ref.read(hi_ptr) as u16) << 8) | (cpu_ref.read(ptr) as u16);
+                cpu_ref.address_mode.address_abs = ((cpu_ref.read(hi_ptr + extra) as u16) << 8) | (cpu_ref.read(ptr + extra) as u16);
                 false
             },
             AddressMode::Rel => {
+                cpu_ref.registers.pc += 1;
                 cpu_ref.address_mode.address_rel = cpu_ref.read(cpu_ref.registers.pc) as u16;
                 cpu_ref.registers.pc += 1;
                 
