@@ -1,36 +1,36 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}};
+use std::{collections::HashMap, fs::File, io::{BufReader, BufRead}, cell::RefCell, rc::Rc};
 
 use super::{
     registers::{Registers, Flag}, 
-    instructions::Instructions, 
+    instructions::{Instructions}, 
     address_mode::{
         AddressMode, 
         AddressingData,
     }, 
-    interfaces::Device,
+    interfaces::{DeviceOps},
     bus::Bus, opcodes::Opcode
 };
 
-pub struct Cpu {
+#[derive(Clone)]
+pub struct Cpu<'a> {
     pub registers : Registers,
-    pub bus       : Option<Box<Bus>>,
+    pub bus       : Option<Rc<RefCell<Bus<'a>>>>,
     pub cycle     : i32,
     pub opcode    : u8,
     pub address_mode : AddressingData,
     pub instruction_set : HashMap<u8, Instructions>
 } 
 
-impl Cpu {
-    pub fn new() -> Cpu {
-        let mut new_cpu = Cpu {
+impl<'a> Cpu<'a> {
+    pub fn new() -> Cpu<'a> {
+        let new_cpu = Cpu {
             registers : Registers::new(),
-            bus       : Option::None,
+            bus       : None,
             cycle     : 0,
             opcode    : 0,
             address_mode : AddressingData::new(),
-            instruction_set : HashMap::new(),
+            instruction_set : Cpu::setup_instruction_map(),
         };
-        new_cpu.setup();
         new_cpu
     }
 
@@ -44,11 +44,11 @@ impl Cpu {
         self.address_mode.address_abs = 0xFFFC;
         let hi = self.read(self.address_mode.address_abs + 1) as u16;
         let lo =  self.read(self.address_mode.address_abs) as u16;
-        self.registers.pc = hi << 8 + lo;
+        self.registers.pc = (hi << 8) + lo;
     }
 
     pub fn interrupt(&mut self, is_non_maskable: bool) -> () {
-        if(!self.registers.get_flag(Flag::I) || is_non_maskable) {
+        if !self.registers.get_flag(Flag::I) || is_non_maskable {
             self.write(0x0100 + self.registers.sp as u16 + 0 , (self.registers.pc >> 8) as u8);
             self.write(0x0100 + self.registers.sp as u16 - 1 , self.registers.pc  as u8);
             self.registers.sp -= 2;
@@ -72,15 +72,52 @@ impl Cpu {
     pub fn fetch(&mut self) -> u8 {
         let opcode_metadata = self.instruction_set.get(&self.opcode);
         if let Some(metadata) = opcode_metadata {
-            if metadata.address_mode == AddressMode::Imm {
+            if metadata.address_mode != AddressMode::Imp {
                 self.registers.fetched = self.read(self.address_mode.address_abs);
             }
         }
         self.registers.fetched
     }
+    
+    pub fn connect_bus(&'a mut self, bus: Rc<RefCell<Bus<'a>>>)  {
+        self.bus = Some(bus);
+    }
+
+    pub fn setup_instruction_map() -> HashMap<u8, Instructions> {
+        let metadata_file: File = File::options()
+            .read(true)
+            .open("instructions.txt").unwrap();
+    
+        let reader = BufReader::new(metadata_file);
+    
+        let mut instructions_set = HashMap::new();
+        reader.split(b'\n').for_each(|line| {
+            let line = line.unwrap();
+            let tokens = line.split(|&c| c == b',')
+                .map(std::str::from_utf8)
+                .map(|s| s.unwrap().trim())
+                .collect::<Vec<&str>>();
+            let instruction = Instructions::new(
+                Opcode::from_str(tokens[1]),
+                tokens[0].parse::<u8>().unwrap(),
+                tokens[3].parse::<u8>().unwrap(),
+                AddressMode::from_str(tokens[2])
+            );
+            instructions_set.insert(instruction.opcode, instruction);
+        });
+
+        // foreach index in 0..255 not in instruction_set add a default instruction
+        for i in 0..255 {
+            if !instructions_set.contains_key(&i) {
+                instructions_set.insert(i, Instructions::new(Opcode::NOP, i, 1, AddressMode::Imp));
+            }
+        }
+
+        instructions_set
+    }
 
     pub fn tick(&mut self) -> () {
-        if(self.cycle == 0) {
+        if self.cycle == 0 {
             self.opcode = self.read(self.registers.pc as u16);
             self.registers.pc += 1;
 
@@ -95,45 +132,16 @@ impl Cpu {
         }
         self.cycle -= 1;
     }
-    
-    
-    pub fn connect_bus(&mut self, bus: Box<Bus>) -> () {
-        self.bus = Option::Some(bus);
-    }
-
-    pub fn setup(&mut self) {
-        let mut metadata_file: File = File::options()
-            .read(true)
-            .open("instructions.txt").unwrap();
-    
-        let reader = BufReader::new(metadata_file);
-    
-        reader.split(b'\n').for_each(|line| {
-            let line = line.unwrap();
-            let tokens = line.split(|&c| c == b',')
-                .map(std::str::from_utf8)
-                .map(|s| s.unwrap().trim())
-                .collect::<Vec<&str>>();
-            let instruction = Instructions::new(
-                Opcode::from_str(tokens[1]),
-                tokens[0].parse::<u8>().unwrap(),
-                tokens[3].parse::<u8>().unwrap(),
-                AddressMode::from_str(tokens[2])
-            );
-            self.instruction_set.insert(instruction.opcode, instruction);
-        });
-    }
 }
 
-impl Device for Cpu {
+impl DeviceOps for Cpu<'_> {
     fn read(&self, addr : u16 ) -> u8 {
-        self.bus.as_ref().unwrap().read(addr)
+        self.bus.as_ref().unwrap().borrow_mut()
+            .read(addr)
     }
     
     fn write(&mut self, addr : u16, data: u8) -> () {
-        match self.bus {
-            Some(ref mut bus) => bus.write(addr, data),
-            None => panic!("Bus not connected"),
-        }
+        self.bus.as_ref().unwrap().borrow_mut()
+            .write(addr, data)
     }
 }

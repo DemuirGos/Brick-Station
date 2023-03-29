@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, Copy)]
 pub enum Flag {
     C = 1 << 0, // Carry
     Z = 1 << 1, // Zero
@@ -9,6 +10,7 @@ pub enum Flag {
     N = 1 << 7, // Negative
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Registers {
     pub x       : u8, // A 15..7 F 7..0
     pub y       : u8, // D 15..7 E 7..0

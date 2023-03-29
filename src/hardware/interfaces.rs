@@ -1,4 +1,4 @@
-pub trait Device {
+pub trait DeviceOps {
     fn within_range(&self, _: u16) -> bool {
         true
     }
